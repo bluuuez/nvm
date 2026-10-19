@@ -1,8 +1,9 @@
 /* NVM – Offline-Modus
  * Beim ersten Besuch werden alle Dateien gespeichert. Danach startet NVM ohne Netz.
- * Online wird im Hintergrund nachgeladen, so kommt eine neue Version beim nächsten Start an.
+ * Seite, Code und Stile: mit Netz immer die neueste Version (Speicher nur als Rückfall).
+ * Schriften, Icons und KaTeX ändern sich nicht: direkt aus dem Speicher.
  * VERSION erhöhen, wenn sich Dateien ändern, damit alte Speicherstände gelöscht werden. */
-const VERSION = 'nvm-v10';
+const VERSION = 'nvm-v11';
 const FILES = [
   './',
   'fonts.css',
@@ -55,20 +56,26 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Aus dem Speicher antworten (schnell, offline) und parallel aktualisieren
+const STATIC = /\.(woff2|png|svg)$|\/katex\//;
+const NET_TIMEOUT = 4000;   // bei sehr langsamem Netz nach 4 s die gespeicherte Version nehmen
+
 self.addEventListener('fetch', (e) => {
   const req = e.request;
-  if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
-  e.respondWith(
-    caches.open(VERSION).then((cache) =>
-      cache.match(req, { ignoreSearch: true }).then((hit) => {
-        const net = fetch(req).then((res) => {
-          if (res && res.ok) cache.put(req, res.clone());
-          return res;
-        }).catch(() => hit || (req.mode === 'navigate' ? cache.match('index.html') : undefined));
-        if (hit) { e.waitUntil(net.catch(() => {})); return hit; }
-        return net;
-      })
-    )
-  );
+  const url = new URL(req.url);
+  if (req.method !== 'GET' || url.origin !== self.location.origin) return;
+  e.respondWith(caches.open(VERSION).then(async (cache) => {
+    const hit = await cache.match(req, { ignoreSearch: true });
+    const fallback = () => hit || (req.mode === 'navigate' ? cache.match('index.html') : undefined);
+    if (hit && STATIC.test(url.pathname)) return hit;
+    // Netz zuerst; 'no-cache' fragt den Server, statt eine alte Kopie aus dem Browser-Cache zu nehmen
+    const net = fetch(req, { cache: 'no-cache' }).then((res) => {
+      if (res && res.ok) cache.put(req, res.clone());
+      return res;
+    });
+    if (!hit) return net.catch(fallback);
+    const timer = new Promise((ok) => setTimeout(() => ok(null), NET_TIMEOUT));
+    const res = await Promise.race([net.catch(() => null), timer]);
+    if (!res) e.waitUntil(net.catch(() => {}));
+    return res || hit;
+  }));
 });

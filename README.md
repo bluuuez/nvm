@@ -7,7 +7,7 @@ Trainingsspiel für Normalkraft-, Querkraft- und Momentenverläufe.
 Online: **https://bluuuez.github.io/nvm/**
 
 Am iPhone in Safari öffnen → Teilen → „Zum Home-Bildschirm“. Nach dem ersten Öffnen läuft NVM
-auch offline; neue Versionen kommen beim nächsten Start mit Netz automatisch an.
+auch offline; mit Netz lädt es immer die neueste Version.
 
 Lokal: `index.html` doppelklicken – läuft direkt im Browser, ohne Installation und ohne Internet.
 NVM setzt keine Cookies und speichert Highscore und Einstellungen nur im eigenen Browser.

@@ -282,7 +282,8 @@ text.sv-cross-text { font-weight: 700; pointer-events: none; }
 .screen { min-height: 100vh; }
 .menu-inner {
   display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
-  grid-template-areas: "hero hero" "modes settings"; gap: 28px 48px;
+  grid-template-areas: "hero hero" "modes settings" "look settings";
+  grid-template-rows: auto auto 1fr; align-items: start; gap: 28px 48px;
   max-width: 1180px; margin: 0 auto; padding: 40px 28px 48px;
 }
 .hero { grid-area: hero; }
@@ -326,6 +327,7 @@ text.sv-cross-text { font-weight: 700; pointer-events: none; }
 .level-desc strong { color: var(--ink); font-weight: 600; }
 .learn-warn { margin: 0; padding: 8px 10px; border-left: 3px solid var(--bad); background: color-mix(in srgb, var(--bad) 7%, transparent); font-size: .93rem; }
 
+.settings.settings-look { grid-area: look; }
 .settings { grid-area: settings; display: flex; flex-direction: column; gap: 14px; }
 .settings h2 { font-size: 1.4rem; }
 .settings h3 { margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 1.1rem; }
@@ -438,7 +440,7 @@ text.sv-cross-text { font-weight: 700; pointer-events: none; }
     border-top: 1px solid var(--line);
     background: color-mix(in srgb, var(--paper) 92%, transparent); backdrop-filter: blur(6px);
   }
-  .menu-inner { grid-template-columns: minmax(0, 1fr); grid-template-areas: "hero" "modes" "settings"; gap: 22px; padding: 24px 16px 40px; }
+  .menu-inner { grid-template-columns: minmax(0, 1fr); grid-template-areas: "hero" "modes" "settings" "look"; grid-template-rows: none; gap: 22px; padding: 24px 16px 40px; }
   .cheat { padding: 16px; }
   .cheat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

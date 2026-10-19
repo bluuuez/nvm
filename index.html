@@ -111,7 +111,7 @@
         </button>
         <button class="mode" type="button" data-mode="learn">
           <span class="mode-name">Lernen</span>
-          <span class="mode-desc">Ohne Druck, nach jeder Antwort mit Erklärung. Was du übst, wählst du bei den Einstellungen.</span>
+          <span class="mode-desc">Ohne Druck, nach jeder Antwort mit Erklärung. Was du übst, stellst du unter „Lernen einstellen“ ein.</span>
         </button>
         <button class="mode mode-quiet" type="button" data-mode="board" id="boardModeBtn" hidden>
           <span class="mode-name">Bestenliste</span>
@@ -123,9 +123,23 @@
         </button>
       </div>
 
+      <div class="settings settings-look">
+        <h2>Darstellung</h2>
+        <p class="settings-note">Für Arcade und Lernen.</p>
+        <div class="seg" data-setting="plot" role="radiogroup" aria-label="Verläufe antragen">
+          <span class="seg-label">Verläufe antragen</span>
+          <button type="button" data-v="tum">Positiv unten (TUM)</button><button type="button" data-v="classic">V und N positiv oben</button>
+        </div>
+        <div class="seg" data-setting="theme" role="radiogroup" aria-label="Look">
+          <span class="seg-label">Look</span>
+          <button type="button" data-v="light">Hell</button><button type="button" data-v="dark">Dunkel</button>
+        </div>
+        <p class="stats" id="stats"></p>
+        <p class="keys">Tasten: <kbd>1</kbd>–<kbd>4</kbd> antworten, <kbd>Leertaste</kbd> weiter, <kbd>L</kbd> Lösung, <kbd>H</kbd> Spickzettel, <kbd>T</kbd> Hell/Dunkel, <kbd>B</kbd> Boss-Taste, <kbd>Esc</kbd> Menü</p>
+      </div>
+
       <div class="settings">
-        <h2>Einstellungen</h2>
-        <h3>Lernen</h3>
+        <h2>Lernen einstellen</h2>
         <p class="settings-note">Schnittgrößen, Aufgaben und Tragwerke: Mehrfachauswahl. Arcade hat feste Regeln, damit die Bestenliste fair bleibt.</p>
         <div class="seg" data-setting="learnQtys" data-multi role="group" aria-label="Schnittgrößen">
           <span class="seg-label">Schnittgrößen</span>
@@ -159,18 +173,6 @@
           <button type="button" data-v="aus">Aus</button><button type="button" data-v="mix">Ab und zu</button><button type="button" data-v="nur">Nur schief</button>
           <span class="seg-help">Schief gibt es als Einfeldträger und Kragarm.</span>
         </div>
-        <h3>Darstellung</h3>
-        <p class="settings-note">Für Arcade und Lernen.</p>
-        <div class="seg" data-setting="plot" role="radiogroup" aria-label="Verläufe antragen">
-          <span class="seg-label">Verläufe antragen</span>
-          <button type="button" data-v="tum">Positiv unten (TUM)</button><button type="button" data-v="classic">V und N positiv oben</button>
-        </div>
-        <div class="seg" data-setting="theme" role="radiogroup" aria-label="Look">
-          <span class="seg-label">Look</span>
-          <button type="button" data-v="light">Hell</button><button type="button" data-v="dark">Dunkel</button>
-        </div>
-        <p class="stats" id="stats"></p>
-        <p class="keys">Tasten: <kbd>1</kbd>–<kbd>4</kbd> antworten, <kbd>Leertaste</kbd> weiter, <kbd>L</kbd> Lösung, <kbd>H</kbd> Spickzettel, <kbd>T</kbd> Hell/Dunkel, <kbd>B</kbd> Boss-Taste, <kbd>Esc</kbd> Menü</p>
       </div>
     </div>
   </section>

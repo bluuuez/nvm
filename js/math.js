@@ -11,7 +11,7 @@
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
   // ------------------------------------------------------------ Erkennen
-  const UNITS = new Set(['kN', 'kNm', 'kN/m', 'm', 'cm', 'mm', 'kN/m²', 'kNm²']);
+  const UNITS = new Set(['kN', 'kNm', 'kN/m', 'kNm/m', 'm', 'cm', 'mm', 'kN/m²', 'kNm²']);
   const FUNCS = { max: '\\max', min: '\\min', sin: '\\sin', cos: '\\cos', tan: '\\tan' };
   const GREEK = { 'α': '\\alpha', 'β': '\\beta', 'γ': '\\gamma', 'δ': '\\delta', 'Δ': '\\Delta', 'Σ': '\\Sigma', '∑': '\\Sigma', 'φ': '\\varphi', 'π': '\\pi' };
   const SUBDIG = '₀₁₂₃₄₅₆₇₈₉';
@@ -64,6 +64,13 @@
         post = ch + post; core = core.slice(0, -1);
       }
       ents.push({ pre, core, post, k: classify(core) });
+    }
+    // „m“ ist eine Einheit nach einer Zahl oder in „je m“, sonst die Größe m (Linienmoment)
+    let prevWord = null;
+    for (const e of ents) {
+      if (e.ws !== undefined) continue;
+      if (e.core === 'm' && !(prevWord && (prevWord.k === 'num' || /^(je|pro)$/i.test(prevWord.core)))) e.k = 'var';
+      prevWord = e;
     }
     // Läufe bilden
     const out = [];
@@ -129,7 +136,7 @@
       if (c === ' ') { i++; continue; }
       if ((m = rest.match(/^um(?![A-Za-z])/))) { L.push({ t: 'op', c: 'um', v: '\\ \\text{um}\\ ' }); i += 2; continue; }
       if ((m = rest.match(/^\|([A-Za-z])\|(max|min)/))) { L.push({ t: 'atom', v: `|${m[1]}|_{\\${m[2]}}` }); i += m[0].length; continue; }
-      if ((m = rest.match(/^(kN\/m²|kN\/m|kNm²|kNm|kN|cm|mm|m)(?![A-Za-z])/)) && L.length && lastAtom().t === 'num') {
+      if ((m = rest.match(/^(kNm\/m|kN\/m²|kN\/m|kNm²|kNm|kN|cm|mm|m)(?![A-Za-z])/)) && L.length && lastAtom().t === 'num') {
         L.push({ t: 'unit', v: '\\,\\mathrm{' + m[1].replace('²', '^2') + '}' }); i += m[0].length; continue;
       }
       if ((m = rest.match(/^d(²?)([VMNqx])(²?)(?![A-Za-z])/))) {          // Ableitungen: dV, dx, d²M, dx²

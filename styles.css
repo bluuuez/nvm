@@ -247,6 +247,7 @@ kbd {
 .sv-load polygon { fill: var(--load); stroke: var(--load); stroke-width: .5; }
 .sv-load-line { stroke: var(--load); stroke-width: 1.8; }
 .sv-qfill { fill: var(--load); opacity: .1; }
+.sv-mband { fill: color-mix(in srgb, var(--load) 6%, transparent); stroke: var(--load); stroke-width: 1; }
 .sv-noFill { fill: none; stroke: var(--load); }
 .sv-dim { stroke: var(--ink-soft); stroke-width: 1; }
 .sv-angle { fill: none; stroke: var(--load); stroke-width: 1.5; }

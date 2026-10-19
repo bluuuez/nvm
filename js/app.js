@@ -13,7 +13,7 @@
   function save(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { /* privat / gesperrt */ } }
   const settings = load('nvm.settings', {
     time: 'auto', calc: 'formel', incl: 'mix', theme: document.documentElement.dataset.theme || 'light',
-    sound: false, learnQty: 'mix', learnTask: 'mix', learnKind: 'alle', learnLevel: '2'
+    sound: false, plot: 'tum', learnQty: 'mix', learnTask: 'mix', learnKind: 'alle', learnLevel: '2'
   });
   // Werte aus älteren Versionen übernehmen
   settings.theme = { paper: 'light', board: 'dark' }[settings.theme] || settings.theme;
@@ -71,9 +71,15 @@
   }
 
   // ---------------------------------------------------------- Einstellungen
+  let cheatBuilt = false;
   function applyTheme() {
     document.documentElement.dataset.theme = settings.theme;
     $('themeColor').content = settings.theme === 'dark' ? '#131417' : '#f5f7fa';
+  }
+  // Antragen der Verläufe: TUM (alles positiv zur gestrichelten Faser) oder klassisch (V, N positiv oben)
+  function applyPlot() {
+    D.setPlotMode(settings.plot);
+    cheatBuilt = false;
   }
   function syncSegs() {
     document.querySelectorAll('.seg[data-setting]').forEach((seg) => {
@@ -100,6 +106,7 @@
       if (!taskExists(settings.learnTask)) settings.learnTask = 'mix';
       save('nvm.settings', settings);
       if (seg.dataset.setting === 'theme') applyTheme();
+      if (seg.dataset.setting === 'plot') applyPlot();
       syncSegs();
     });
   });
@@ -446,7 +453,6 @@
   $('homeBtn').addEventListener('click', goMenu);
 
   // ---------------------------------------------------------- Spickzettel
-  let cheatBuilt = false;
   function buildCheat() {
     const grid = $('cheatGrid');
     let h = '';
@@ -460,7 +466,11 @@
         `<p class="formula">${tex(c.formula)}</p></article>`;
     }
     grid.innerHTML = h;
-    $('cheatRules').innerHTML = N.RULES.map((r) => `<section><h3>${esc(r.title)}</h3><ul>${r.lines.map((l) => `<li>${tex(l)}</li>`).join('')}</ul></section>`).join('');
+    const plotLine = settings.plot === 'classic' ? 'M wird positiv nach unten angetragen, N und V positiv nach oben.' : null;
+    $('cheatRules').innerHTML = N.RULES.map((r) => `<section><h3>${esc(r.title)}</h3><ul>${r.lines.map((l) => {
+      const line = plotLine && l.startsWith('Alle Schnittgrößen werden positiv') ? plotLine : l;
+      return `<li>${tex(line)}</li>`;
+    }).join('')}</ul></section>`).join('');
     cheatBuilt = true;
   }
   function openCheat() {
@@ -537,6 +547,7 @@
   window.NVMapp = { S, startMode, nextQuestion, answer, handleTap, toggleSolution, nextStep, openCheat, closeCheat, toggleBoss, goMenu, settings };
 
   applyTheme();
+  applyPlot();
   syncSegs();
   goMenu();
 

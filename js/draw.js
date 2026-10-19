@@ -201,6 +201,24 @@
       const yl = place(xp, yb - rM - 7, s, fsS, 'middle');
       front += text(xp, yl, s, 'sv-load-text', fsS);
     }
+    // Linienmoment: Band mit kleinen Drehpfeilen über dem Träger (über einer Streckenlast gestapelt)
+    for (const ld of loads.filter((l) => l.type === 'm')) {
+      const xa = X(ld.x), xb = X(ld.x2);
+      let top = y0;
+      for (const lq of qs) {   // über der Streckenlast samt Beschriftung
+        if (lq.x < ld.x2 - 1e-9 && lq.x2 > ld.x + 1e-9) top = Math.min(top, y0 - Math.max(Math.abs(lq.v), Math.abs(lq.v2)) / qmax * qMax - fsS - 8);
+      }
+      for (const lm of loads.filter((l) => l.type === 'M')) {   // über Einzelmomenten samt Beschriftung
+        if (lm.x > ld.x - 1e-9 && lm.x < ld.x2 + 1e-9) top = Math.min(top, yb - rM - fsS - 8);
+      }
+      const bh = compact ? 20 : 26, yt = top - bh - 3, yc = yt + bh / 2;
+      g += `<rect x="${r1(xa)}" y="${r1(yt)}" width="${r1(xb - xa)}" height="${bh}" class="sv-mband"/>`;
+      const r = compact ? 6 : 8, nA = Math.max(2, Math.round((xb - xa) / (compact ? 24 : 34)));
+      for (let i = 0; i < nA; i++) g += momentArc(xa + (i + 0.5) * (xb - xa) / nA, yc, r, ld.v > 0, 'sv-load', compact ? 4.5 : 5.5);
+      const s = sym ? 'm' : `m = ${fmtN(Math.abs(ld.v))} kNm/m`;
+      const yl = place((xa + xb) / 2, yt - 6, s, fsS, 'middle');
+      front += text((xa + xb) / 2, yl, s, 'sv-load-text', fsS);
+    }
     sys.sup.forEach((sp) => { g += support(X(sp.x), yb, sp.type, 0, sp.x <= L / 2 ? -1 : 1, compact); });
     for (const h of sys.hinges) g += `<circle cx="${r1(X(h))}" cy="${yb}" r="${compact ? 4.5 : 6}" class="sv-hinge"/>`;
 
@@ -394,6 +412,8 @@
   }
 
   // ------------------------------------------------------------ Verlauf
+  let plotMode = 'tum';
+  const setPlotMode = (m) => { plotMode = m === 'classic' ? 'classic' : 'tum'; };
   function diagram(xs, f, qty, Lp, opts = {}) {
     const compact = !!opts.compact;
     const W = opts.W || (compact ? 400 : 800), H = opts.H || (compact ? 210 : 150);
@@ -409,7 +429,8 @@
       front += text((X(0) + X(Lp)) / 2, yc - 14, `${qty} = 0 im ganzen Träger`, 'sv-note', 14);
       return `<svg viewBox="0 0 ${W} ${H}" class="sv sv-diagram">${g}${front}</svg>`;
     }
-    const dir = qty === 'M' ? 1 : -1;               // M positiv nach unten, N und V nach oben
+    // TUM: alle Schnittgrößen positiv zur gestrichelten Faser (nach unten); klassisch: nur M nach unten
+    const dir = plotMode === 'tum' || qty === 'M' ? 1 : -1;
     const Y = (v) => yc + dir * v / s * A;
     const n = xs.length;
     const poly = (vals) => {
@@ -490,5 +511,5 @@
     return `<svg viewBox="0 0 ${W} ${H}" class="sv sv-diagram">${g}${front}</svg>`;
   }
 
-  root.NVM.draw = { system, diagram, htmlTex, svgTex, esc };
+  root.NVM.draw = { system, diagram, htmlTex, svgTex, esc, setPlotMode };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -22,7 +22,15 @@ Einstellungen nur im eigenen Browser.
 - **Spickzettel:** Vorzeichen, Beziehungen, Standardfälle
 
 Einstellungen: Zeit pro Aufgabe, Werte-Aufgaben als Formeln, mit glatten Zahlen oder mit
-Taschenrechner, schiefe Stäbe gemischt/aus/nur schief, Hell oder Dunkel.
+Taschenrechner, schiefe Stäbe gemischt/aus/nur schief, Verläufe positiv zur gestrichelten Faser
+(TUM) oder V und N positiv oben, Hell oder Dunkel.
+
+## Statik
+
+Lasten: Einzellasten (auch schräg und waagerecht), Gleich- und Dreieckslasten, Einzelmomente und
+Linienmomente. Vorzeichen und Differentialbeziehungen wie in Statik 1 an der TUM
+(x nach rechts, z nach unten, dN/dx = −n, dV/dx = −q, dM/dx = V − m).
+Der Löser ist gegen die Tabellen in Schneider, Bautabellen (Abschnitt 4 A) geprüft.
 
 ## Tasten
 

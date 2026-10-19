@@ -322,11 +322,6 @@ text.sv-cross-text { font-weight: 700; pointer-events: none; }
 .mode-main .mode-name { font-size: 1.65rem; }
 .mode-main .mode-desc { color: color-mix(in srgb, var(--btn-ink) 75%, transparent); }
 .mode-quiet { border-style: dashed; background: transparent; box-shadow: none; }
-.mode-learn { border: 1.5px solid var(--line); border-radius: var(--radius); background: var(--sheet); box-shadow: var(--shadow); }
-.mode-learn:hover { border-color: var(--ink); }
-.mode-learn .mode { border: 0; background: transparent; box-shadow: none; }
-.learn-opts { display: grid; gap: 8px; padding: 0 18px 16px; }
-.learn-hint { margin: -4px 0 2px; color: var(--ink-soft); font-size: .9rem; }
 .level-desc { margin: 0; padding: 8px 10px; border-left: 3px solid var(--line); color: var(--ink-soft); font-size: .93rem; line-height: 1.45; }
 .level-desc strong { color: var(--ink); font-weight: 600; }
 .learn-warn { margin: 0; padding: 8px 10px; border-left: 3px solid var(--bad); background: color-mix(in srgb, var(--bad) 7%, transparent); font-size: .93rem; }
@@ -338,8 +333,6 @@ text.sv-cross-text { font-weight: 700; pointer-events: none; }
 .seg-help { width: 100%; margin-top: 2px; color: var(--ink-soft); font-size: .85rem; }
 .seg { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .seg-label { width: 100%; margin-bottom: 2px; color: var(--ink-soft); font-size: .9rem; font-weight: 600; }
-.learn-opts .seg { position: relative; padding-left: 108px; }
-.learn-opts .seg-label { position: absolute; left: 0; top: 7px; width: 104px; margin: 0; }
 .seg button {
   padding: 6px 11px; border: 1.5px solid var(--line); border-radius: 999px;
   background: var(--sheet); cursor: pointer; font-size: .95rem; font-weight: 600;
@@ -466,8 +459,6 @@ text.sv-cross-text { font-weight: 700; pointer-events: none; }
   .answer .val { height: 96px; min-height: 0; font-size: 1.45rem; }
   .answer .tag { top: 7px; right: 8px; font-size: .78rem; }
   .solution svg { max-height: none; }
-  .learn-opts .seg { padding-left: 0; }
-  .learn-opts .seg-label { position: static; width: 100%; }
   .boss-page { margin: 0; padding: 28px 22px; }
   .board-list li { grid-template-columns: 2.4em minmax(0, 1fr) 5.5em; }
   .board-list .lv { display: none; }

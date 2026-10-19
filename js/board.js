@@ -39,7 +39,9 @@
   const base = () => cfg().supabaseUrl.replace(/\/+$/, '') + '/rest/v1/scores';
   function headers(extra) {
     const k = cfg().supabaseKey;
-    return Object.assign({ apikey: k, Authorization: `Bearer ${k}`, 'Content-Type': 'application/json' }, extra || {});
+    const h = { apikey: k, 'Content-Type': 'application/json' };
+    if (!k.startsWith('sb_')) h.Authorization = `Bearer ${k}`;   // nur alte anon-Schlüssel (JWT) brauchen den Bearer-Kopf
+    return Object.assign(h, extra || {});
   }
   async function req(url, opts) {
     const ctl = new AbortController();

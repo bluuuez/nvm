@@ -2,10 +2,22 @@
  * Beim ersten Besuch werden alle Dateien gespeichert. Danach startet NVM ohne Netz.
  * Online wird im Hintergrund nachgeladen, so kommt eine neue Version beim nächsten Start an.
  * VERSION erhöhen, wenn sich die Dateiliste ändert. */
-const VERSION = 'nvm-v2';
+const VERSION = 'nvm-v3';
 const FILES = [
   './', 'index.html', 'styles.css', 'fonts.css', 'manifest.webmanifest', 'icon.svg',
-  'js/core.js', 'js/draw.js', 'js/app.js',
+  'js/core.js', 'js/math.js', 'js/draw.js', 'js/app.js',
+  'katex/katex.min.js', 'katex/katex.min.css',
+  'katex/fonts/KaTeX_AMS-Regular.woff2',
+  'katex/fonts/KaTeX_Main-Bold.woff2',
+  'katex/fonts/KaTeX_Main-BoldItalic.woff2',
+  'katex/fonts/KaTeX_Main-Italic.woff2',
+  'katex/fonts/KaTeX_Main-Regular.woff2',
+  'katex/fonts/KaTeX_Math-BoldItalic.woff2',
+  'katex/fonts/KaTeX_Math-Italic.woff2',
+  'katex/fonts/KaTeX_Size1-Regular.woff2',
+  'katex/fonts/KaTeX_Size2-Regular.woff2',
+  'katex/fonts/KaTeX_Size3-Regular.woff2',
+  'katex/fonts/KaTeX_Size4-Regular.woff2',
   'icons/apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png',
   'fonts/barlow-latin-400-normal.woff2', 'fonts/barlow-latin-500-normal.woff2', 'fonts/barlow-latin-600-normal.woff2',
   'fonts/barlow-latin-700-normal.woff2', 'fonts/barlow-latin-500-italic.woff2',

@@ -95,8 +95,20 @@ h1, h2, h3 { font-family: "Barlow Semi Condensed", "Barlow", system-ui, sans-ser
 }
 .hud .k { color: var(--ink-soft); font-weight: 500; margin-right: 4px; }
 .hud .hud-mode { font-weight: 800; }
-.hud .lives { letter-spacing: 2px; color: var(--m); }
-.hud .lives .lost { color: var(--line); }
+.hud .lives { display: inline-flex; gap: 3px; align-self: center; }
+.hud .heart { width: 17px; height: 16px; fill: var(--m); transition: fill .3s, transform .3s; }
+.hud .heart.lost { fill: none; stroke: var(--ink-soft); stroke-width: 1.6; opacity: .55; }
+
+/* Formeln (KaTeX) */
+.katex { font-size: 1.1em; line-height: 1.2; }
+.answer .val .katex { font-size: 1.12em; }
+.explain .katex { font-size: 1.04em; }
+.explain li, .explain p { line-height: 1.55; }
+.katex .mfrac { padding: 0 .06em; }
+.mnw { white-space: nowrap; }
+.katex .mfrac .frac-line { border-bottom-width: .06em; }
+.sv .m-i { font-family: KaTeX_Math, "Times New Roman", serif; font-style: italic; font-weight: 400; }
+.sv .m-r { font-family: KaTeX_Main, "Times New Roman", serif; font-style: normal; font-weight: 400; }
 .hud .pop {
   color: var(--good); font-weight: 800;
   animation: pop 1.1s ease-out forwards;

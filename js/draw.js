@@ -23,7 +23,14 @@
     if (last < s.length) parts.push({ t: s.slice(last), sub: false });
     return parts;
   }
-  function svgTex(s) {
+  // Beschriftungen mit Formeln (Lasten, Lagerkräfte, Winkel, Symbole) in Formelschrift
+  const MATH_CLS = new Set(['sv-load-text', 'sv-react', 'sv-angle-text', 'sv-dim-sym', 'sv-note']);
+  function svgTex(s, cls) {
+    const M = root.NVM && root.NVM.math;
+    if (M && cls && MATH_CLS.has(cls)) return M.svg(s, plainSvgTex, { symbols: true });
+    return plainSvgTex(s);
+  }
+  function plainSvgTex(s) {
     let out = '', inSub = false;
     for (const p of texParts(s)) {
       if (p.sub) { out += `<tspan dy="0.28em" font-size="0.72em">${esc(p.t)}</tspan>`; inSub = true; }
@@ -31,12 +38,17 @@
     }
     return out;
   }
-  function htmlTex(s) {
+  function plainHtmlTex(s) {
     return texParts(s).map((p) => (p.sub ? `<sub>${esc(p.t)}</sub>` : esc(p.t))).join('');
+  }
+  // Text mit Formeln: Formeln über KaTeX (echte Brüche), Rest wie gehabt
+  function htmlTex(s) {
+    const M = root.NVM && root.NVM.math;
+    return M ? M.html(s, plainHtmlTex) : plainHtmlTex(s);
   }
 
   function text(x, y, s, cls, size, anchor = 'middle', extra = '') {
-    return `<text x="${r1(x)}" y="${r1(y)}" class="${cls}" font-size="${size}" text-anchor="${anchor}" ${extra}>${svgTex(s)}</text>`;
+    return `<text x="${r1(x)}" y="${r1(y)}" class="${cls}" font-size="${size}" text-anchor="${anchor}" ${extra}>${svgTex(s, cls)}</text>`;
   }
   function line(x1, y1, x2, y2, cls, extra = '') {
     return `<line x1="${r1(x1)}" y1="${r1(y1)}" x2="${r1(x2)}" y2="${r1(y2)}" class="${cls}" ${extra}/>`;

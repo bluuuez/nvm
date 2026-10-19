@@ -406,7 +406,9 @@
     const hud = $('hud');
     let h = '';
     if (S.mode === 'arcade') {
-      const hearts = '♥'.repeat(Math.max(S.lives, 0)) + `<span class="lost">${'♥'.repeat(3 - Math.max(S.lives, 0))}</span>`;
+      // als SVG, damit iOS kein rotes Emoji daraus macht
+      const heart = (lost) => `<svg class="heart${lost ? ' lost' : ''}" viewBox="0 0 24 22" aria-hidden="true"><path d="M12 21.2 10.6 20C5.4 15.4 2 12.3 2 8.5 2 5.4 4.4 3 7.5 3c1.7 0 3.4.8 4.5 2.1C13.1 3.8 14.8 3 16.5 3 19.6 3 22 5.4 22 8.5c0 3.8-3.4 6.9-8.6 11.5z"/></svg>`;
+      const hearts = [0, 1, 2].map((k) => heart(k >= Math.max(S.lives, 0))).join('');
       h = `<span class="hud-mode">Arcade</span><span><span class="k">Level</span>${S.level}</span>` +
         `<span><span class="k">Punkte</span>${S.score.toLocaleString('de-DE')}</span>` +
         `<span><span class="k">Serie</span>${S.streak}</span><span class="lives" aria-label="${S.lives} Leben">${hearts}</span>`;

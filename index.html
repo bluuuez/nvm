@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>NVM – Schnittgrößen trainieren</title>
+  <meta name="description" content="Never mind – ich kann Schnittgrößen. Normalkraft, Querkraft und Momente an zufälligen Tragwerken erkennen.">
+  <meta name="theme-color" content="#f5f7fa">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,400;0,500;0,600;0,700;1,500&family=Barlow+Semi+Condensed:wght@500;600;700;800&display=swap">
+  <link rel="stylesheet" href="styles.css">
+  <script>
+    // Theme vor dem ersten Zeichnen setzen (kein Aufblitzen)
+    (function () {
+      var t = null;
+      try { t = JSON.parse(localStorage.getItem('nvm.settings') || '{}').theme; } catch (e) {}
+      if (t === 'paper') t = 'light';
+      if (t === 'board') t = 'dark';
+      if (t !== 'light' && t !== 'dark') t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.dataset.theme = t;
+    })();
+  </script>
+</head>
+<body>
+
+  <!-- ============================== Spiel ============================== -->
+  <div class="app" id="app" hidden>
+    <header class="bar">
+      <button class="brand" id="brandBtn" type="button" aria-label="Zum Start">
+        <svg class="wordmark" viewBox="10 40 600 200" aria-hidden="true">
+          <text x="108" y="168" text-anchor="middle" class="hm-letter hm-n">N</text>
+          <text x="312" y="168" text-anchor="middle" class="hm-letter hm-v">V</text>
+          <text x="507" y="168" text-anchor="middle" class="hm-letter hm-m">M</text>
+          <line x1="18" y1="196" x2="602" y2="196" class="hm-beam wm-beam"/>
+          <path d="M30 196 V176 H186 V196" class="wm-shape hm-sn wm-fn"/>
+          <path d="M232 196 V172 H312 V220 H392 V196" class="wm-shape hm-sv wm-fv"/>
+          <path d="M422 196 Q 507 290 592 196" class="wm-shape hm-sm wm-fm"/>
+        </svg>
+      </button>
+      <div class="hud" id="hud" aria-live="polite"></div>
+      <nav class="bar-actions" aria-label="Spiel">
+        <button class="icon-btn" id="themeBtn" type="button" title="Hell oder Dunkel (T)" aria-label="Hell oder Dunkel umschalten">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9c0-.5 0-1-.1-1.4A6 6 0 0 1 13.4 3.1 9 9 0 0 0 12 3z"/></svg>
+        </button>
+        <button class="icon-btn" id="soundBtn" type="button" title="Ton (S)" aria-label="Ton an oder aus" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="snd-wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"/></svg>
+        </button>
+        <button class="text-btn" id="cheatBtn" type="button">Spickzettel</button>
+        <button class="text-btn" id="menuBtn" type="button">Menü</button>
+      </nav>
+      <div class="timer" id="timer" aria-hidden="true"><div class="timer-fill" id="timerFill"></div></div>
+    </header>
+
+    <main class="game" id="game">
+      <section class="stage" aria-label="Aufgabe">
+        <div class="ask">
+          <h1 class="question" id="question"></h1>
+          <p class="hint" id="hint"></p>
+        </div>
+        <div class="sheet system" id="systemBox"></div>
+        <div class="answers" id="answers" role="group" aria-label="Antworten"></div>
+        <div class="sheet solution" id="solution" hidden></div>
+        <div class="sheet tapinfo" id="tapinfo" hidden></div>
+      </section>
+      <aside class="side" aria-label="Erklärung">
+        <div class="explain" id="explain"></div>
+        <div class="actions">
+          <button class="btn primary" id="nextBtn" type="button" disabled>Weiter</button>
+          <button class="btn" id="solBtn" type="button" disabled>Lösung zeigen</button>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <!-- ============================== Start ============================== -->
+  <section class="screen menu" id="menu" aria-label="Start">
+    <div class="menu-inner">
+      <div class="hero">
+        <svg class="hero-mark" viewBox="0 0 620 300" role="img" aria-label="NVM">
+          <defs>
+            <pattern id="hatchN" width="7" height="7" patternUnits="userSpaceOnUse"><line x1="3.5" y1="0" x2="3.5" y2="7" class="hm-h hm-hn"/></pattern>
+            <pattern id="hatchV" width="7" height="7" patternUnits="userSpaceOnUse"><line x1="3.5" y1="0" x2="3.5" y2="7" class="hm-h hm-hv"/></pattern>
+            <pattern id="hatchM" width="7" height="7" patternUnits="userSpaceOnUse"><line x1="3.5" y1="0" x2="3.5" y2="7" class="hm-h hm-hm"/></pattern>
+          </defs>
+          <text x="108" y="168" text-anchor="middle" class="hm-letter hm-n">N</text>
+          <text x="312" y="168" text-anchor="middle" class="hm-letter hm-v">V</text>
+          <text x="507" y="168" text-anchor="middle" class="hm-letter hm-m">M</text>
+          <line x1="18" y1="196" x2="602" y2="196" class="hm-beam"/>
+          <!-- N: konstant -->
+          <path d="M30 196 V176 H186 V196" class="hm-shape hm-sn" fill="url(#hatchN)" pathLength="1"/>
+          <!-- V: Sprung -->
+          <path d="M232 196 V172 H312 V220 H392 V196" class="hm-shape hm-sv" fill="url(#hatchV)" pathLength="1"/>
+          <!-- M: Parabel nach unten -->
+          <path d="M422 196 Q 507 290 592 196" class="hm-shape hm-sm" fill="url(#hatchM)" pathLength="1"/>
+        </svg>
+        <p class="tagline">Never mind – ich kann Schnittgrößen.</p>
+        <p class="lede">Normalkraft, Querkraft und Momente an zufälligen Tragwerken erkennen. Jede Aufgabe ist exakt gerechnet, jeder Fehler wird erklärt.</p>
+      </div>
+
+      <div class="modes">
+        <button class="mode mode-main" type="button" data-mode="arcade">
+          <span class="mode-name">Arcade spielen</span>
+          <span class="mode-desc">Drei Leben, Zeitlimit und Level, die immer kniffliger werden.</span>
+        </button>
+        <div class="mode-learn">
+          <button class="mode" type="button" data-mode="learn">
+            <span class="mode-name">Lernen</span>
+            <span class="mode-desc">Ohne Druck, nach jeder Antwort mit Erklärung.</span>
+          </button>
+          <div class="learn-opts">
+            <div class="seg" data-setting="learnQty" role="radiogroup" aria-label="Schnittgröße">
+              <span class="seg-label">Thema</span>
+              <button type="button" data-v="mix">Alles</button><button type="button" data-v="M">M</button><button type="button" data-v="V">V</button><button type="button" data-v="N">N</button><button type="button" data-v="wert">Werte</button>
+            </div>
+            <div class="seg" data-setting="learnKind" role="radiogroup" aria-label="Tragwerk">
+              <span class="seg-label">Tragwerk</span>
+              <button type="button" data-v="alle">Alle</button><button type="button" data-v="eft">Einfeld</button><button type="button" data-v="krag">Kragarm</button><button type="button" data-v="ueber">Mit Kragarm</button><button type="button" data-v="gerber">Gerber</button><button type="button" data-v="schraeg">Schräg</button>
+            </div>
+            <div class="seg" data-setting="learnLevel" role="radiogroup" aria-label="Stufe">
+              <span class="seg-label">Stufe</span>
+              <button type="button" data-v="1">1</button><button type="button" data-v="2">2</button><button type="button" data-v="3">3</button><button type="button" data-v="4">4</button><button type="button" data-v="5">5</button>
+            </div>
+          </div>
+        </div>
+        <button class="mode" type="button" data-mode="exam">
+          <span class="mode-name">Klausur schreiben</span>
+          <span class="mode-desc">Zehn Aufgaben, am Ende steht eine Note.</span>
+        </button>
+        <button class="mode mode-quiet" type="button" data-mode="cheat">
+          <span class="mode-name">Spickzettel</span>
+          <span class="mode-desc">Vorzeichen, Beziehungen und Standardfälle zum Nachschlagen.</span>
+        </button>
+      </div>
+
+      <div class="settings">
+        <h2>Einstellungen</h2>
+        <div class="seg" data-setting="time" role="radiogroup" aria-label="Zeit pro Aufgabe">
+          <span class="seg-label">Zeit pro Aufgabe</span>
+          <button type="button" data-v="auto">Auto</button><button type="button" data-v="10">10 s</button><button type="button" data-v="20">20 s</button><button type="button" data-v="30">30 s</button><button type="button" data-v="60">60 s</button><button type="button" data-v="120">120 s</button><button type="button" data-v="inf">Ohne</button>
+        </div>
+        <div class="seg" data-setting="calc" role="radiogroup" aria-label="Werte-Aufgaben">
+          <span class="seg-label">Werte-Aufgaben</span>
+          <button type="button" data-v="formel">Formeln anklicken</button><button type="button" data-v="einfach">Kopfrechnen</button><button type="button" data-v="rechner">Taschenrechner</button>
+        </div>
+        <div class="seg" data-setting="incl" role="radiogroup" aria-label="Schiefe Stäbe">
+          <span class="seg-label">Schiefe Stäbe</span>
+          <button type="button" data-v="mix">Gemischt</button><button type="button" data-v="aus">Aus</button><button type="button" data-v="nur">Nur schief</button>
+        </div>
+        <div class="seg" data-setting="theme" role="radiogroup" aria-label="Look">
+          <span class="seg-label">Look</span>
+          <button type="button" data-v="light">Hell</button><button type="button" data-v="dark">Dunkel</button>
+        </div>
+        <p class="stats" id="stats"></p>
+        <p class="keys">Tasten: <kbd>1</kbd>–<kbd>4</kbd> antworten, <kbd>Leertaste</kbd> weiter, <kbd>L</kbd> Lösung, <kbd>H</kbd> Spickzettel, <kbd>T</kbd> Hell/Dunkel, <kbd>B</kbd> Boss-Taste, <kbd>Esc</kbd> Menü</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== Ende ============================== -->
+  <section class="screen end" id="end" hidden aria-label="Auswertung">
+    <div class="end-inner">
+      <p class="end-kicker" id="endKicker"></p>
+      <h1 class="end-title" id="endTitle"></h1>
+      <div class="end-body" id="endBody"></div>
+      <div class="end-actions">
+        <button class="btn primary" id="againBtn" type="button">Nochmal</button>
+        <button class="btn" id="homeBtn" type="button">Zum Start</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== Spickzettel ============================== -->
+  <section class="screen cheat" id="cheat" hidden aria-label="Spickzettel">
+    <div class="cheat-head">
+      <h1>Spickzettel</h1>
+      <button class="btn" id="cheatClose" type="button">Zurück</button>
+    </div>
+    <div class="cheat-grid" id="cheatGrid"></div>
+    <div class="cheat-rules" id="cheatRules"></div>
+  </section>
+
+  <!-- ============================== Boss-Taste ============================== -->
+  <section class="screen boss" id="boss" hidden aria-label="Übungsblatt">
+    <article class="boss-page">
+      <p class="boss-meta">Technische Universität · Lehrstuhl für Statik · Wintersemester</p>
+      <h1>Statik II – Übungsblatt 6, Lösungsvorschlag</h1>
+      <h2>Aufgabe 2: Durchlaufträger nach dem Kraftgrößenverfahren</h2>
+      <p>Das System ist einfach statisch unbestimmt. Als statisch Unbestimmte wird das Stützmoment X₁ über dem Mittelauflager gewählt. Das statisch bestimmte Grundsystem entsteht durch Einfügen eines Gelenks über Lager B.</p>
+      <p>Für den Lastfall Gleichstreckenlast ergeben sich die Verformungsgrößen aus den Integraltafeln zu δ₁₀ = −q·l³/(12·EI) und δ₁₁ = 2·l/(3·EI). Aus der Verträglichkeitsbedingung δ₁₀ + X₁·δ₁₁ = 0 folgt X₁ = −q·l²/8.</p>
+      <p>Die endgültigen Schnittgrößen erhält man durch Superposition M = M₀ + X₁·M₁. Die Querkraft folgt aus V = dM/dx; die Kontrolle der Auflagerkräfte über ΣV = 0 ist erfüllt.</p>
+      <h2>Aufgabe 3: Rahmen mit Zugband</h2>
+      <p>Die Normalkraft im Zugband ergibt sich aus der Gelenkbedingung im Firstpunkt. Die Biegemomente in den Riegeln reduzieren sich gegenüber dem System ohne Zugband deutlich; maßgebend wird der Lastfall Wind von links.</p>
+      <p class="boss-foot">Seite 3 von 7</p>
+    </article>
+  </section>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/core.js"></script>
+  <script src="js/draw.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

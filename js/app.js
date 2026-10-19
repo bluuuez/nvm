@@ -13,16 +13,18 @@
   function save(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { /* privat / gesperrt */ } }
   const settings = load('nvm.settings', {
     time: 'auto', calc: 'formel', incl: 'mix', theme: document.documentElement.dataset.theme || 'light',
-    sound: false, learnQty: 'mix', learnKind: 'alle', learnLevel: '2'
+    sound: false, learnQty: 'mix', learnTask: 'mix', learnKind: 'alle', learnLevel: '2'
   });
   if (settings.theme === 'paper') settings.theme = 'light';
   if (settings.theme === 'board' || (settings.theme !== 'light' && settings.theme !== 'dark')) settings.theme = settings.theme === 'board' ? 'dark' : 'light';
+  if (settings.learnQty === 'wert') { settings.learnQty = 'mix'; settings.learnTask = 'werte'; }
+  if (settings.learnTask === 'tippen') settings.learnTask = 'max';
   const stats = load('nvm.stats', { best: 0, bestExam: 6, total: 0, correct: 0 });
 
   // ---------------------------------------------------------- Zustand
   const S = {
     mode: 'arcade', state: 'menu', q: null, level: 1, score: 0, lives: 3, streak: 0, bestStreak: 0,
-    nCorrect: 0, nAsked: 0, examN: 10, mistakes: {}, tMax: 30, tLeft: 30, timed: false,
+    nCorrect: 0, nAsked: 0, mistakes: {}, tMax: 30, tLeft: 30, timed: false,
     solShown: false, chosen: -1, clickS: NaN, lastPts: 0, pendingEnd: false, levelUp: '',
     map: null, boss: false, cheatFrom: 'menu', fresh: true
   };
@@ -76,6 +78,18 @@
         b.setAttribute('aria-checked', String(String(settings[key]) === b.dataset.v));
       });
     });
+    // Aufgaben, die es für Größe und Tragwerk nicht gibt, ausgrauen (z. B. N + Maximum antippen)
+    const kindOf = (k) => (k === 'schraeg' ? 'alle' : k);
+    const ok = (qty, task, kind) => task === 'mix' || N.typePool(1, qty, task, kindOf(kind)).length > 0;
+    const cur = { learnQty: settings.learnQty, learnTask: settings.learnTask, learnKind: settings.learnKind };
+    ['learnTask'].forEach((key) => {
+      document.querySelectorAll(`.seg[data-setting="${key}"] button`).forEach((b) => {
+        const t = Object.assign({}, cur, { [key]: b.dataset.v });
+        const can = ok(t.learnQty, t.learnTask, t.learnKind);
+        b.disabled = !can;
+        b.title = can ? '' : 'Diese Kombination gibt es nicht';
+      });
+    });
     $('soundBtn').setAttribute('aria-pressed', String(!!settings.sound));
   }
   document.querySelectorAll('.seg[data-setting]').forEach((seg) => {
@@ -83,6 +97,8 @@
       const b = e.target.closest('button');
       if (!b) return;
       settings[seg.dataset.setting] = b.dataset.v;
+      // Größe/Tragwerk gewechselt und die Aufgabe passt nicht mehr: Aufgabe auf „Gemischt“
+      if (settings.learnTask !== 'mix' && !N.typePool(1, settings.learnQty, settings.learnTask, settings.learnKind === 'schraeg' ? 'alle' : settings.learnKind).length) settings.learnTask = 'mix';
       save('nvm.settings', settings);
       if (seg.dataset.setting === 'theme') applyTheme();
       syncSegs();
@@ -95,13 +111,12 @@
     else if (settings.incl === 'nur') incl = 1;
     else incl = S.level >= 2 ? 0.3 : 0.12;
     if (S.mode === 'learn' && settings.learnKind === 'schraeg') incl = 1;
-    return { calc: settings.calc, incl };
+    return { calc: settings.calc, incl, task: S.mode === 'learn' ? settings.learnTask : 'mix' };
   }
   function timeFor() {
     if (settings.time === 'inf') return Infinity;
     if (settings.time !== 'auto') return Number(settings.time);
     if (S.mode === 'arcade') return Math.max(15, 34 - 3 * S.level);
-    if (S.mode === 'exam') return 60;
     return Infinity;
   }
 
@@ -110,7 +125,6 @@
     const acc = stats.total ? Math.round(100 * stats.correct / stats.total) : 0;
     const parts = [];
     parts.push(stats.best ? `Highscore ${stats.best.toLocaleString('de-DE')} (${N.rankName(stats.best)})` : 'Noch kein Highscore');
-    if (stats.bestExam <= 5) parts.push(`beste Klausur ${N.fmtGrade(stats.bestExam)}`);
     if (stats.total) parts.push(`${stats.total} Aufgaben gelöst, ${acc} % richtig`);
     $('stats').textContent = parts.join(', ') + '.';
   }
@@ -134,7 +148,11 @@
       mode: m, score: 0, lives: 3, streak: 0, bestStreak: 0, nCorrect: 0, nAsked: 0,
       mistakes: {}, pendingEnd: false, levelUp: ''
     });
-    S.level = m === 'learn' ? Number(settings.learnLevel) : m === 'exam' ? 2 : 1;
+    S.level = m === 'learn' ? Number(settings.learnLevel) : 1;
+    if (m === 'learn' && settings.learnTask !== 'mix') {
+      const k = settings.learnKind === 'schraeg' ? 'alle' : settings.learnKind;
+      if (!N.typePool(1, settings.learnQty, settings.learnTask, k).length) { settings.learnTask = 'mix'; save('nvm.settings', settings); }
+    }
     showScreen('app');
     nextQuestion();
   }
@@ -145,7 +163,6 @@
       qty = settings.learnQty;
       kind = settings.learnKind === 'schraeg' ? 'alle' : settings.learnKind;
     }
-    if (S.mode === 'exam') S.level = [2, 2, 3, 3, 3, 4, 4, 4, 5, 5][Math.min(S.nAsked, 9)];
     S.tMax = timeFor(); S.timed = isFinite(S.tMax); S.tLeft = S.tMax;
     S.q = N.buildQuestion(S.level, qty, kind, force || '', cfg());
     S.state = 'question'; S.solShown = false; S.chosen = -1; S.clickS = NaN; S.fresh = true;
@@ -167,9 +184,9 @@
     const q = S.q, fb = S.state === 'feedback';
     $('question').innerHTML = tex(q.text);
     if (!fb) $('hint').textContent = isClick() ? 'Fahre über das System und tippe auf die gesuchte Stelle.' : 'Antwort antippen oder Taste 1 bis 4.';
-    if (q.type === 'sysFromM') {
+    if (q.type.startsWith('sysFrom')) {
       const W = isNarrow() ? 520 : 800, H = isNarrow() ? 260 : 290;
-      $('systemBox').innerHTML = D.diagram(q.cv.xs.map((x) => x * ca()), q.cv.M, 'M', Lp(), { W, H });
+      $('systemBox').innerHTML = D.diagram(q.cv.xs.map((x) => x * ca()), q.cv[q.qty], q.qty, Lp(), { W, H });
       S.map = null;
     } else renderSystem(false);
     $('solution').hidden = true;
@@ -205,7 +222,7 @@
       b.setAttribute('aria-label', `Antwort ${k + 1}`);
       let inner = `<span class="num" aria-hidden="true">${k + 1}</span>`;
       if (q.type.startsWith('diag')) inner += D.diagram(o.xs.map((x) => x * ca()), o.f, q.qty, Lp(), { compact: true });
-      else if (q.type === 'sysFromM') inner += D.system(o.sys, { mode: 'compact', symbolic: true }).svg;
+      else if (q.type.startsWith('sysFrom')) inner += D.system(o.sys, { mode: 'compact', symbolic: true }).svg;
       else inner += `<span class="val">${tex(o.label)}</span>`;
       if (fb) {
         b.disabled = true;
@@ -306,7 +323,7 @@
       if (navigator.vibrate) { try { navigator.vibrate(60); } catch (e) { /* egal */ } }
     }
     beep(ok);
-    S.pendingEnd = (S.mode === 'arcade' && S.lives <= 0) || (S.mode === 'exam' && S.nAsked >= S.examN);
+    S.pendingEnd = S.mode === 'arcade' && S.lives <= 0;
     save('nvm.stats', stats);
     $('hint').textContent = ok ? (S.lastPts ? `Richtig, +${S.lastPts} Punkte.` : 'Richtig.') : (tag === 'zeit' ? 'Zeit abgelaufen.' : 'Leider falsch – die Erklärung steht unten.');
     if (isClick() || (!ok && S.mode === 'learn')) showSolution(); else renderQuestion();
@@ -349,8 +366,12 @@
     let mode;
     const tStr = S.timed ? `${Math.round(S.tMax)} Sekunden` : 'kein Zeitlimit';
     if (S.mode === 'arcade') mode = `Arcade, ${tStr}. Punkte gibt es für Level und Tempo, eine Serie richtiger Antworten verdoppelt sie bis zu.`;
-    else if (S.mode === 'exam') mode = `Klausur, Aufgabe ${S.nAsked + 1} von ${S.examN}, ${tStr}.`;
-    else mode = `Lernen, ${tStr}. Nach jeder Antwort bekommst du die Erklärung.`;
+    else {
+      const qn = { mix: '', N: 'Normalkraft', V: 'Querkraft', M: 'Moment' }[settings.learnQty] || '';
+      const tn = { mix: '', verlauf: 'Verlauf zum System', system: 'System zum Verlauf', max: 'Maximum antippen', null: 'Nullstelle antippen', werte: 'Werte' }[settings.learnTask] || '';
+      const focus = [qn, tn].filter(Boolean).join(', ');
+      mode = `Lernen${focus ? ` (${focus})` : ''}, ${tStr}. Nach jeder Antwort bekommst du die Erklärung.`;
+    }
     let extra = '';
     if (q.symbolic) extra = '<p class="muted">Die Maße sind als Buchstaben angegeben – gesucht ist die passende Formel.</p>';
     $('explain').innerHTML = `<p class="tip"><strong>Tipp:</strong> ${tex(N.randomTip())}</p><p class="muted">${esc(mode)}</p>${extra}`;
@@ -390,11 +411,8 @@
         `<span><span class="k">Punkte</span>${S.score.toLocaleString('de-DE')}</span>` +
         `<span><span class="k">Serie</span>${S.streak}</span><span class="lives" aria-label="${S.lives} Leben">${hearts}</span>`;
       if (S.lastPts && S.state === 'feedback') h += `<span class="pop">+${S.lastPts}</span>`;
-    } else if (S.mode === 'learn') {
-      h = `<span class="hud-mode">Lernen</span><span>${S.nCorrect} von ${S.nAsked} richtig</span><span><span class="k">Serie</span>${S.streak}</span><span><span class="k">Stufe</span>${S.level}</span>`;
     } else {
-      const cur = Math.min(S.nAsked + (S.state === 'question' ? 1 : 0), S.examN);
-      h = `<span class="hud-mode">Klausur</span><span>Aufgabe ${cur} von ${S.examN}</span><span>${S.nCorrect} richtig</span>`;
+      h = `<span class="hud-mode">Lernen</span><span>${S.nCorrect} von ${S.nAsked} richtig</span><span><span class="k">Serie</span>${S.streak}</span><span><span class="k">Stufe</span>${S.level}</span>`;
     }
     hud.innerHTML = h;
   }
@@ -418,7 +436,7 @@
     S.state = 'end';
     const ml = Object.keys(S.mistakes).sort((a, b) => S.mistakes[b] - S.mistakes[a]).slice(0, 5);
     let body = '';
-    if (S.mode === 'arcade') {
+    {
       const isNew = S.score > stats.best;
       if (isNew) stats.best = S.score;
       $('endKicker').textContent = 'Game over';
@@ -426,12 +444,6 @@
       body += `<p>Level ${S.level}, beste Serie ${S.bestStreak}, ${S.nCorrect} von ${S.nAsked} richtig.</p>`;
       body += `<p>Rang: <strong>${esc(N.rankName(S.score))}</strong></p>`;
       if (isNew) body += '<p><strong>Neuer Highscore.</strong></p>';
-    } else {
-      const p = S.nCorrect / S.examN, g = N.gradeOf(p);
-      if (g < stats.bestExam) stats.bestExam = g;
-      $('endKicker').textContent = 'Klausur beendet';
-      $('endTitle').innerHTML = `Note <span class="mark">${N.fmtGrade(g)}</span>`;
-      body += `<p>${S.nCorrect} von ${S.examN} Aufgaben richtig (${Math.round(100 * p)} %).</p><p>${esc(N.gradeComment(g))}</p>`;
     }
     if (ml.length) body += `<p style="margin-top:16px"><strong>Daran hat es gehakt:</strong></p><ul>${ml.map((t) => `<li>${esc(N.tagLabel(t))}: ${S.mistakes[t]}×</li>`).join('')}</ul>`;
     else body += '<p style="margin-top:16px">Keine Fehler. Stark.</p>';
@@ -535,4 +547,9 @@
   applyTheme();
   syncSegs();
   goMenu();
+
+  // ---------------------------------------------------------- Offline-Modus
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+    window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => { /* ohne Offline weiter */ }); });
+  }
 })();

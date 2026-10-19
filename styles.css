@@ -305,7 +305,8 @@ text.sv-cross-text { font-weight: 700; pointer-events: none; }
   cursor: pointer; padding: 6px 11px; border-radius: 999px;
   border: 1.5px solid var(--line); background: var(--sheet); font-weight: 600; font-size: .95rem;
 }
-.seg button:hover { border-color: var(--ink); }
+.seg button:hover:not(:disabled) { border-color: var(--ink); }
+.seg button:disabled { opacity: .35; cursor: not-allowed; }
 .seg button[aria-checked="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
 .stats { margin: 6px 0 0; color: var(--ink-soft); }
 .keys { margin: 0; color: var(--ink-soft); font-size: .9rem; line-height: 1.9; }

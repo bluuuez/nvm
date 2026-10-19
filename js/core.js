@@ -592,9 +592,9 @@
     return { opts: perm.map((i) => all[i]), correct: perm.indexOf(0) };
   }
 
-  function makeSysOptions(sys, sol, level) {
+  function makeSysOptions(sys, sol, level, qq = 'M') {
     const L = sys.L, xc = linspace(0, L, 301);
-    const Mc = sgArr(sol, xc).M;
+    const Mc = sgArr(sol, xc)[qq];
     if (maxAbs(Mc) < 1e-9) return null;
     const ref = Mc.map((v) => v / maxAbs(Mc));
     let pool = [];
@@ -602,7 +602,7 @@
       if (md.tag === 'komponenten') continue;
       const so = solveSys(md.sys);
       if (!so.ok) continue;
-      pool.push(mkCand([], [], sgArr(so, xc).M, md.tag, sysTagExpl(md.tag, md.info), md.sys));
+      pool.push(mkCand([], [], sgArr(so, xc)[qq], md.tag, sysTagExpl(md.tag, md.info, qq), md.sys));
     }
     pool = sortByPrio(pool);
     const keep = [], sel = [];
@@ -612,11 +612,12 @@
     }
     const inc = isIncl(sys) ? 1 : 0;
     for (let t = 0; t < 30 && sel.length < 3; t++) {
-      const s2 = genSystem(level, sys.kind, false, inc);
+      const s2 = genSystem(level, sys.kind, qq === 'N', inc);
       const so2 = solveSys(s2);
       if (!so2.ok) continue;
-      const Mc2 = sgArr(so2, linspace(0, s2.L, 301)).M;
-      if (acceptCand(Mc2, ref, keep)) sel.push(mkCand([], [], Mc2, 'anderesSystem', sysTagExpl('anderesSystem', ''), s2));
+      const Mc2 = sgArr(so2, linspace(0, s2.L, 301))[qq];
+      if (maxAbs(Mc2) < 1e-9) continue;
+      if (acceptCand(Mc2, ref, keep)) sel.push(mkCand([], [], Mc2, 'anderesSystem', sysTagExpl('anderesSystem', '', qq), s2));
     }
     if (sel.length < 3) return null;
     const all = [mkCand([], [], Mc, 'richtig', '', sys), ...sel.slice(0, 3)];
@@ -961,25 +962,50 @@
   }
 
   // ------------------------------------------------------------ Aufgaben
-  function pickType(level, qty) {
+  // Aufgabentypen je Übungsform und Schnittgröße
+  const TASKS = {
+    verlauf: { M: ['diagM'], V: ['diagV'], N: ['diagN'] },
+    system: { M: ['sysFromM'], V: ['sysFromV'], N: ['sysFromN'] },
+    max: { M: ['clickMmax'], V: ['clickVmax'], N: [] },
+    null: { M: ['clickM0'], V: ['clickV0'], N: [] },
+    werte: { M: ['valMax'], V: ['valR'], N: [] }
+  };
+  // Liefert die möglichen Typen; leer heißt: Kombination gibt es nicht
+  function typePool(level, qty, task, kind) {
     let ts;
-    switch (qty) {
-      case 'M':
-        ts = ['diagM', 'diagM', 'diagM', 'valMax', 'clickMmax'];
-        if (level >= 2) ts.push('sysFromM', 'sysFromM');
-        if (level >= 3) ts.push('clickM0');
-        break;
-      case 'V': ts = ['diagV', 'diagV', 'diagV', 'valR', 'clickV0']; break;
-      case 'N': ts = ['diagN']; break;
-      case 'wert': ts = ['valMax', 'valR']; break;
-      default:
-        ts = ['diagM', 'diagM', 'diagM', 'diagV', 'diagV', 'valMax', 'valR', 'clickMmax'];
-        if (level >= 2) ts.push('sysFromM', 'sysFromM', 'clickV0');
-        if (level >= 3) ts.push('diagN', 'clickM0');
+    if (task && task !== 'mix' && TASKS[task]) {
+      const t = TASKS[task];
+      ts = qty === 'M' || qty === 'V' || qty === 'N' ? t[qty].slice() : [...t.M, ...t.V, ...t.N];
+    } else {
+      switch (qty) {
+        case 'M':
+          ts = ['diagM', 'diagM', 'diagM', 'valMax', 'clickMmax'];
+          if (level >= 2) ts.push('sysFromM', 'sysFromM');
+          if (level >= 3) ts.push('clickM0');
+          break;
+        case 'V': ts = ['diagV', 'diagV', 'diagV', 'valR', 'clickV0', 'clickVmax']; if (level >= 2) ts.push('sysFromV'); break;
+        case 'N': ts = ['diagN', 'diagN', 'sysFromN']; break;
+        case 'wert': ts = ['valMax', 'valR']; break;
+        default:
+          ts = ['diagM', 'diagM', 'diagM', 'diagV', 'diagV', 'valMax', 'valR', 'clickMmax'];
+          if (level >= 2) ts.push('sysFromM', 'sysFromM', 'clickV0', 'sysFromV');
+          if (level >= 3) ts.push('diagN', 'clickM0');
+      }
     }
+    // Kombinationen, die mit dem Tragwerk praktisch nie entstehen
+    const drop = [];
+    if (kind === 'krag') drop.push('clickV0', 'clickM0');
+    if (kind === 'eft') drop.push('clickM0');
+    const f = ts.filter((t) => !drop.includes(t));
+    if (task && task !== 'mix' && TASKS[task]) return f;      // gezielt: lieber leer als etwas anderes
+    return f.length ? f : ts;
+  }
+  function pickType(level, qty, task, kind) {
+    let ts = typePool(level, qty, task, kind);
+    if (!ts.length) ts = typePool(level, 'mix', task, kind);   // z. B. N + Stelle antippen
     return pick(ts);
   }
-  const isClickType = (t) => ['clickMmax', 'clickV0', 'clickM0'].includes(t);
+  const isClickType = (t) => ['clickMmax', 'clickVmax', 'clickV0', 'clickM0'].includes(t);
   const isValType = (t) => ['valMax', 'valR'].includes(t);
 
   function signChangeX(xs, f, L) {
@@ -1015,12 +1041,14 @@
 
   function buildQuestion(level, qty, kind, forceType, cfg) {
     cfg = cfg || { calc: 'rechner', incl: 0 };
+    let task = cfg.task || 'mix';
     for (let attempt = 0; attempt < 160; attempt++) {
       if (attempt >= 60) forceType = '';
-      let typ = forceType || pickType(level, qty);
+      if (attempt >= 150) task = 'mix';
+      let typ = forceType || pickType(level, qty, task, kind);
       let kpref = kind;
       if (typ === 'clickV0' && kind === 'krag') typ = 'diagV';
-      if (typ === 'clickM0' && kind === 'alle' && cfg.incl < 1) kpref = pick(['ueber', 'gerber']);
+      if (typ === 'clickM0' && kind === 'alle') kpref = pick(['ueber', 'gerber']);
 
       if (isValType(typ) && cfg.calc !== 'rechner') {
         const it = classicItem(typ === 'valMax' ? 'M' : 'R', cfg.calc, cfg.incl > 0);
@@ -1033,7 +1061,7 @@
           explain: explainSystem(it.sys, sol, cv, typ === 'valR' ? 'V' : 'M')
         };
       }
-      const sys = genSystem(level, kpref, typ === 'diagN', cfg.incl);
+      const sys = genSystem(level, kpref, typ === 'diagN' || typ === 'sysFromN', cfg.incl);
       const sol = solveSys(sys);
       if (!sol.ok) continue;
       const cv = curves(sys, sol);
@@ -1051,12 +1079,13 @@
             q.solLines = [`Richtig ist Antwort ${r.correct + 1}.`];
           }
         }
-      } else if (typ === 'sysFromM') {
-        const r = makeSysOptions(sys, sol, level);
+      } else if (typ.startsWith('sysFrom')) {
+        const qq = typ[7];
+        const r = makeSysOptions(sys, sol, level, qq);
         if (!r) good = false;
         else {
-          q.opts = r.opts; q.correct = r.correct;
-          q.text = 'Hier siehst du einen Momentenverlauf. Zu welchem System gehört er?';
+          q.qty = qq; q.opts = r.opts; q.correct = r.correct;
+          q.text = `Hier siehst du einen ${{ M: 'Momentenverlauf', V: 'Querkraftverlauf', N: 'Normalkraftverlauf' }[qq]}. Zu welchem System gehört er?`;
           q.solLines = [`Richtig ist System ${r.correct + 1}.`];
         }
       } else if (typ === 'valMax') {
@@ -1073,6 +1102,10 @@
           const mx = maxAbs(cv.M);
           tgt = cv.xs.filter((x, i) => Math.abs(cv.M[i]) >= 0.985 * mx);
           q.text = 'Tippe auf die Stelle, an der das Biegemoment betragsmäßig am größten ist.';
+        } else if (typ === 'clickVmax') {
+          const mx = maxAbs(cv.V);
+          tgt = cv.xs.filter((x, i) => Math.abs(cv.V[i]) >= 0.985 * mx);
+          q.text = 'Tippe auf die Stelle, an der die Querkraft betragsmäßig am größten ist.';
         } else if (typ === 'clickV0') {
           tgt = signChangeX(cv.xs, cv.V, sys.L);
           q.text = 'Tippe auf eine Stelle, an der die Querkraft ihr Vorzeichen wechselt.';
@@ -1082,15 +1115,18 @@
         }
         if (!tgt.length || maxAbs(cv.M) < 1e-6) good = false;
         else {
-          q.target = tgt; q.tol = 0.045 * sys.L; q.clickTag = 'klick' + typ.slice(5);
+          q.target = tgt; q.tol = 0.045 * sys.L; q.clickTag = 'klick' + typ.slice(5); if (typ.startsWith('clickV')) q.qty = 'V';
           if (typ === 'clickMmax') {
             let im = 0; cv.M.forEach((v, i) => { if (Math.abs(v) > Math.abs(cv.M[im])) im = i; });
             q.solLines = [`Gesucht war x = ${fmt(cv.xs[im] * sys.ca, 2)} m (|M|max = ${fmt(Math.abs(cv.M[im]))} kNm).`];
+          } else if (typ === 'clickVmax') {
+            let im = 0; cv.V.forEach((v, i) => { if (Math.abs(v) > Math.abs(cv.V[im])) im = i; });
+            q.solLines = ['Gesucht war ' + clusterText(tgt.map((x) => x * sys.ca), sys.L * sys.ca) + ` (|V|max = ${fmt(Math.abs(cv.V[im]))} kN).`];
           } else q.solLines = ['Gesucht war ' + clusterText(tgt.map((x) => x * sys.ca), sys.L * sys.ca) + '.'];
         }
       }
       if (!good) continue;
-      const focus = typ === 'diagN' ? 'N' : ['diagV', 'valR', 'clickV0'].includes(typ) ? 'V' : 'M';
+      const focus = ['diagN', 'sysFromN'].includes(typ) ? 'N' : ['diagV', 'valR', 'clickV0', 'clickVmax', 'sysFromV'].includes(typ) ? 'V' : 'M';
       q.explain = explainSystem(sys, sol, cv, focus);
       return q;
     }
@@ -1311,13 +1347,36 @@
       case 'komponenten': return 'Sinus und Kosinus vertauscht: Quer zur Stabachse wirkt F·cos α, längs der Achse F·sin α (α ist die Neigung gegen die Waagerechte).';
       case 'anderesSystem': return 'Dieser Verlauf gehört zu einer ganz anderen Belastung oder Lagerung.';
       case 'klickMmax': return '|M| ist dort am größten, wo die Querkraft null wird bzw. ihr Vorzeichen wechselt – oder an einer Einspannung bzw. einem Innenlager.';
+      case 'klickVmax': return '|V| ist meist direkt an einem Auflager am größten – dort wird die Auflagerkraft eingeleitet. Neben großen Einzellasten oder an einer Einspannung lohnt sich ein zweiter Blick.';
       case 'klickV0': return 'V wechselt dort das Vorzeichen, wo M ein Extremum hat: unter Einzellasten, über Innenlagern oder unter Streckenlasten bei V = 0.';
       case 'klickM0': return 'Momentennullpunkte liegen beim Träger mit Kragarm zwischen Feld- und Stützmoment, beim Gerberträger unter anderem genau am Gelenk.';
       case 'zeit': return 'Die Zeit ist abgelaufen.';
       default: return 'Das passt nicht zum System.';
     }
   }
-  function sysTagExpl(tag, info) {
+  function sysTagExpl(tag, info, qq = 'M') {
+    if (qq === 'V') {
+      switch (tag) {
+        case 'resultierende': return 'Dieses System hat eine Einzellast statt der Streckenlast – dann wäre V abschnittsweise konstant mit einem Sprung. Der gegebene Verlauf ist aber schräg.';
+        case 'verschmiert': return 'Dieses System hat eine Streckenlast – dann fiele V dort linear ab. Der gegebene Verlauf hat einen Sprung, also eine Einzellast.';
+        case 'momentDreh': return 'Bei diesem System dreht das Einzelmoment andersherum – das ändert die Auflagerkräfte und damit das Niveau von V.';
+        case 'gelenkVerschoben': return 'Bei diesem System liegt das Gelenk woanders – Auflagerkräfte und damit die Sprünge in V wären anders.';
+        case 'lagerGespiegelt': return 'Bei diesem System liegt die Lagerung gespiegelt – die Sprünge durch die Auflagerkräfte lägen woanders.';
+        case 'lastVerschoben': return 'Bei diesem System greift die Last woanders an – der Sprung bzw. Knick im V-Verlauf läge an einer anderen Stelle.';
+        case 'losGedreht': return 'Bei diesem System ist das Loslager anders orientiert – die Querkomponente der Lagerkraft und damit V wären anders.';
+        case 'anderesSystem': return 'Dieses System erzeugt einen anderen Querkraftverlauf.';
+      }
+    } else if (qq === 'N') {
+      switch (tag) {
+        case 'resultierende': return 'Dieses System hat eine Einzellast statt der Streckenlast – dann wäre N abschnittsweise konstant. Der gegebene Verlauf ändert sich aber linear.';
+        case 'verschmiert': return 'Dieses System hat eine Streckenlast – dann änderte sich N linear. Der gegebene Verlauf springt aber.';
+        case 'lagerGespiegelt': return 'Bei diesem System sitzt das Festlager auf der anderen Seite – dann trüge der andere Trägerteil die Normalkraft.';
+        case 'lastVerschoben': return 'Bei diesem System greift die Last woanders an – der Sprung in N läge an einer anderen Stelle.';
+        case 'losGedreht': return 'Bei diesem System ist das Loslager anders orientiert – damit verteilt sich die Kraft längs des Stabs anders auf die Lager.';
+        case 'anderesSystem': return 'Dieses System erzeugt einen anderen Normalkraftverlauf.';
+        case 'momentDreh': case 'gelenkVerschoben': return 'Dieses System erzeugt einen anderen Normalkraftverlauf.';
+      }
+    }
     switch (tag) {
       case 'resultierende': return 'Dieses System hat eine Einzellast statt der Streckenlast – dann wäre M abschnittsweise geradlinig. Der gegebene Verlauf ist aber gekrümmt.';
       case 'verschmiert': return 'Dieses System hat eine Streckenlast – dann wäre M überall gekrümmt. Der gegebene Verlauf hat einen Knick, also eine Einzellast.';
@@ -1381,7 +1440,7 @@
     mittig: 'Formel für Last in der Mitte', hebel: 'Hebelarm', hebelVertauscht: 'Hebelarme vertauscht', dreieck: 'Dreieck und Rechteck verwechselt',
     dreieckSchwerpunkt: 'Schwerpunkt der Dreieckslast', rechteck: 'Dreieck als Rechteck', stablaenge: 'Stablänge statt Grundriss',
     cosDoppelt: 'cos α zu viel', null: 'Lagerkraft vergessen', lage: 'Lage des Moments', faktorX: 'Vorfaktor', symmetrie: 'Lastverteilung beim Dreieck',
-    klickMmax: 'Ort von |M|max', klickV0: 'Vorzeichenwechsel von V', klickM0: 'Momentennullpunkt', zeit: 'Zeit abgelaufen'
+    klickMmax: 'Ort von |M|max', klickVmax: 'Ort von |V|max', klickV0: 'Vorzeichenwechsel von V', klickM0: 'Momentennullpunkt', zeit: 'Zeit abgelaufen'
   };
   const tagLabel = (t) => TAG_LABELS[t] || t;
 
@@ -1462,7 +1521,7 @@
     fmt, fmtL, fmtN, fmtGrade,
     mkLoad, mkSup, baseSys, setIncline, isIncl, genSystem, demoSystem,
     loadArrays, solveSys, sgAt, sgArr, eqVec, curves, critPts, distRes, pickQ,
-    systemMods, classicCase, classicItem, buildQuestion, pickType, isClickType, isValType,
+    systemMods, classicCase, classicItem, buildQuestion, pickType, typePool, isClickType, isValType,
     clusterRanges, supNames, explainSystem, momentAtSupport,
     tagExpl, tagLabel, praise, randomTip, rankName, gradeOf, gradeComment, RULES, cheatCases
   };

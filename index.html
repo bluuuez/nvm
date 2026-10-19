@@ -5,13 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>NVM – Schnittgrößen trainieren</title>
   <meta name="description" content="Never mind – ich kann Schnittgrößen. Normalkraft, Querkraft und Momente an zufälligen Tragwerken erkennen.">
-  <meta name="theme-color" content="#f5f7fa">
+  <meta name="theme-color" content="#f5f7fa" id="themeColor">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,400;0,500;0,600;0,700;1,500&family=Barlow+Semi+Condensed:wght@500;600;700;800&display=swap">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="NVM">
+  <link rel="stylesheet" href="fonts.css">
   <link rel="stylesheet" href="styles.css">
   <script>
     // Theme vor dem ersten Zeichnen setzen (kein Aufblitzen)
@@ -113,8 +115,12 @@
           </button>
           <div class="learn-opts">
             <div class="seg" data-setting="learnQty" role="radiogroup" aria-label="Schnittgröße">
-              <span class="seg-label">Thema</span>
-              <button type="button" data-v="mix">Alles</button><button type="button" data-v="M">M</button><button type="button" data-v="V">V</button><button type="button" data-v="N">N</button><button type="button" data-v="wert">Werte</button>
+              <span class="seg-label">Größe</span>
+              <button type="button" data-v="mix">Alles</button><button type="button" data-v="N">N</button><button type="button" data-v="V">V</button><button type="button" data-v="M">M</button>
+            </div>
+            <div class="seg" data-setting="learnTask" role="radiogroup" aria-label="Aufgabe">
+              <span class="seg-label">Aufgabe</span>
+              <button type="button" data-v="mix">Gemischt</button><button type="button" data-v="verlauf">Verlauf zum System</button><button type="button" data-v="system">System zum Verlauf</button><button type="button" data-v="max">Maximum antippen</button><button type="button" data-v="null">Nullstelle antippen</button><button type="button" data-v="werte">Werte</button>
             </div>
             <div class="seg" data-setting="learnKind" role="radiogroup" aria-label="Tragwerk">
               <span class="seg-label">Tragwerk</span>
@@ -126,10 +132,6 @@
             </div>
           </div>
         </div>
-        <button class="mode" type="button" data-mode="exam">
-          <span class="mode-name">Klausur schreiben</span>
-          <span class="mode-desc">Zehn Aufgaben, am Ende steht eine Note.</span>
-        </button>
         <button class="mode mode-quiet" type="button" data-mode="cheat">
           <span class="mode-name">Spickzettel</span>
           <span class="mode-desc">Vorzeichen, Beziehungen und Standardfälle zum Nachschlagen.</span>

@@ -215,7 +215,12 @@
     let s;
     switch (x.t) {
       case 'frac': s = `\\dfrac{${render(stripGroup(x.num))}}{${render(stripGroup([x.den]))}}`; break;
-      case 'group': s = `\\left(${render(x.items)}\\right${x.open ? '.' : ')'}`; break;
+      case 'group': {
+        const inner = render(x.items);
+        // große Klammern nur um Brüche, sonst normale: M(x) statt M (x)
+        s = /\\dfrac/.test(inner) ? `\\left(${inner}\\right${x.open ? '.' : ')'}` : `(${inner}${x.open ? '' : ')'}`;
+        break;
+      }
       case 'sqrtOf': s = `\\sqrt{${render(stripGroup([x.arg]))}}`; break;
       case '/': s = '/'; break;
       default: s = x.v;

@@ -81,27 +81,102 @@
     };
   }
 
-  // Lagersymbole in lokalen Koordinaten (y nach unten), gedreht um rot (Grad, Uhrzeigersinn)
+  // Lagersymbole wie in Statik 1 (TUM): Gelenkpunkt, Dreieck, darunter
+  //   Festlager – Grundlinie mit Schraffur, Loslager – Doppellinie (Gleitebene), Einspannung – Wand mit Schraffur.
+  // Lokale Koordinaten mit y nach unten, gedreht um rot (Grad, Uhrzeigersinn).
+  const SUP = (compact) => (compact ? { w: 8, h: 12, r: 3, gap: 4 } : { w: 12, h: 18, r: 4, gap: 5.5 });
+  function supDepth(type, compact) {
+    const { h, gap } = SUP(compact);
+    return type === 'einsp' ? h * 1.45 : type === 'fest' ? h + 6 : h + gap;
+  }
   function support(X, Y, type, rot, outw, compact) {
-    const w = compact ? 8 : 11, h = compact ? 12 : 16;
+    const { w, h, r, gap } = SUP(compact);
     let g = `<g transform="translate(${r1(X)},${r1(Y)}) rotate(${r1(rot)})">`;
     if (type === 'einsp') {
-      const hh = h * 1.45;
-      g += `<line x1="0" y1="${-hh}" x2="0" y2="${hh}" class="sv-sup-wall"/>`;
-      for (let i = 0; i < 7; i++) {
-        const y = -hh + (i + 0.5) * (2 * hh / 7);
-        g += `<line x1="0" y1="${r1(y)}" x2="${outw * 8}" y2="${r1(y + 8)}" class="sv-hatch"/>`;
+      const hh = h * 1.45, n = compact ? 6 : 8;
+      g += `<line x1="0" y1="${r1(-hh)}" x2="0" y2="${r1(hh)}" class="sv-sup-wall"/>`;
+      for (let i = 0; i < n; i++) {
+        const y = -hh + (i + 0.5) * (2 * hh / n);
+        g += `<line x1="0" y1="${r1(y)}" x2="${outw * 7}" y2="${r1(y + 7)}" class="sv-hatch"/>`;
       }
     } else {
+      const gl = 1.55 * w;
       g += `<polygon points="0,0 ${-w},${h} ${w},${h}" class="sv-sup"/>`;
-      const yg = type === 'fest' ? h : h + 5;
-      g += `<line x1="${-1.7 * w}" y1="${yg}" x2="${1.7 * w}" y2="${yg}" class="sv-ground"/>`;
-      for (let i = 0; i < 6; i++) {
-        const x = -1.7 * w + (i + 0.5) * (3.4 * w / 6);
-        g += `<line x1="${r1(x)}" y1="${yg}" x2="${r1(x - 5)}" y2="${yg + 6}" class="sv-hatch"/>`;
+      if (type === 'fest') {
+        g += `<line x1="${r1(-gl)}" y1="${h}" x2="${r1(gl)}" y2="${h}" class="sv-ground"/>`;
+        for (let i = 0; i < 6; i++) {
+          const x = -gl + 3 + i * ((2 * gl - 3) / 6);
+          g += `<line x1="${r1(x + 4)}" y1="${h}" x2="${r1(x - 1)}" y2="${h + 5.5}" class="sv-hatch"/>`;
+        }
+      } else {
+        g += `<line x1="${r1(-gl)}" y1="${r1(h + gap)}" x2="${r1(gl)}" y2="${r1(h + gap)}" class="sv-ground"/>`;
       }
+      g += `<circle cx="0" cy="0" r="${r}" class="sv-pin"/>`;
     }
     return g + '</g>';
+  }
+
+  // Stab mit gestrichelter Faser auf der +z-Seite (bei x nach rechts: unten)
+  function beamSvg(ax, ay, bx, by, compact) {
+    const dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy) || 1;
+    const zx = -dy / len, zy = dx / len, off = compact ? 4 : 5.5, cut = compact ? 1 : 2;
+    const ex = dx / len * cut, ey = dy / len * cut;
+    return line(ax, ay, bx, by, 'sv-beam') +
+      line(ax + zx * off + ex, ay + zy * off + ey, bx + zx * off - ex, by + zy * off - ey, 'sv-fiber');
+  }
+
+  // Bemaßung mit Schrägstrichen an den Maßgrenzen
+  const dimTick = (x, y) => line(x - 4, y + 4, x + 4, y - 4, 'sv-dim-tick');
+
+  // Koordinatensystem x → rechts, z ↓ unten (wie in der Vorlesung)
+  function axesSvg(x, y) {
+    return arrow(x, y, x + 30, y, 'sv-axes', 7, 1.2) + arrow(x, y, x, y + 24, 'sv-axes', 7, 1.2) +
+      text(x + 36, y + 4, 'x', 'sv-dim-sym', 14, 'start') + text(x + 5, y + 30, 'z', 'sv-dim-sym', 14, 'start');
+  }
+
+  // Lagerreaktionen als Pfeile in ihrer positiven Richtung (V nach oben, H nach rechts, Einspannmoment
+  // im Sinne eines positiven Schnittmoments am Stabende); die Werte stehen mit Vorzeichen daneben.
+  //   p: Lagerpunkt, inward: Einheitsvektor vom Lager in den Stab, end: −1 Anfang, +1 Ende, 0 innen
+  function reactionArrows(sys, sol, i, p, sp, opt) {
+    const { compact, inward, end, side, rot } = opt;
+    const { w, h, gap } = SUP(compact);
+    let g = '';
+    const depth = supDepth(sp.type, compact) + 2, len = compact ? 22 : 30, hd = compact ? 7 : 9;
+    sol.unk.forEach((u, j) => {
+      if (u.s !== i) return;
+      const r = sol.R[j];
+      if (u.c === 'V') {
+        const yb0 = p[1] + depth;
+        g += arrow(p[0], yb0 + len, p[0], yb0, 'sv-react-arrow', hd, 1.8);
+      } else if (u.c === 'H') {
+        if (Math.abs(r) < 1e-9) return;
+        if (end) {
+          const y = p[1] + (sp.type === 'einsp' ? h * 1.45 + 9 : 0);
+          if (end < 0) g += arrow(p[0] - 50, y, p[0] - 9, y, 'sv-react-arrow', hd, 1.8);
+          else g += arrow(p[0] + 9, y, p[0] + 50, y, 'sv-react-arrow', hd, 1.8);
+        } else {
+          const y = p[1] + h, x0 = p[0] - side * (1.55 * w + 4);
+          if (side > 0) g += arrow(x0 - 40, y, x0, y, 'sv-react-arrow', hd, 1.8);
+          else g += arrow(x0, y, x0 + 40, y, 'sv-react-arrow', hd, 1.8);
+        }
+      } else if (u.c === 'N') {
+        // senkrecht zur Stabachse, entlang der gedrehten Lagerachse
+        const a = rot * Math.PI / 180, nx = -Math.sin(a), ny = Math.cos(a);   // lokale y-Achse des Lagers
+        const d = h + gap + 2, tip = [p[0] + nx * d, p[1] + ny * d];
+        g += arrow(tip[0] + nx * len, tip[1] + ny * len, tip[0], tip[1], 'sv-react-arrow', hd, 1.8);
+      } else {
+        // Einspannmoment: Halbkreis auf der Außenseite der Wand
+        const R = compact ? 18 : 26, phi = Math.atan2(inward[1], inward[0]), sg = sp.x <= sys.L / 2 ? 1 : -1;
+        const pts = [];
+        for (let k = 0; k <= 24; k++) {
+          const t = phi + sg * (Math.PI / 2 + Math.PI * k / 24);
+          pts.push([p[0] + R * Math.cos(t), p[1] + R * Math.sin(t)]);
+        }
+        g += `<polyline points="${pts.slice(0, -2).map((q) => r1(q[0]) + ',' + r1(q[1])).join(' ')}" class="sv-react-arrow sv-react-arc"/>`;
+        g += arrow(pts[20][0], pts[20][1], pts[24][0], pts[24][1], 'sv-react-arrow', hd, 0.01);
+      }
+    });
+    return g;
   }
 
   function momentArc(X, Y, r, cw, cls, head) {
@@ -137,8 +212,8 @@
     const sol = opts.sol || null;
     const L = sys.L;
     const narrow = !compact && !!opts.narrow;
-    const W = compact ? 400 : narrow ? 520 : 800, H = compact ? 200 : narrow ? 300 : 290;
-    const X0 = compact ? 36 : narrow ? 54 : 80, X1 = compact ? 364 : narrow ? 466 : 720, yb = compact ? 128 : 160;
+    const W = compact ? 400 : narrow ? 520 : 800, H = compact ? 168 : narrow ? 300 : 290;
+    const X0 = compact ? 36 : narrow ? 54 : 80, X1 = compact ? 364 : narrow ? 466 : 720, yb = compact ? 116 : 160;
     const kx = (X1 - X0) / L;
     const X = (s) => X0 + s * kx;
     const fs = narrow ? 17 : 15, fsS = sym ? fs + 3 : fs;
@@ -168,7 +243,7 @@
       const yl = place(xl, y0 - Math.max(h1, h2) - 7, s, fsS, anc);
       front += text(xl, yl, s, 'sv-load-text', fsS, anc);
     }
-    g += line(X0, yb, X1, yb, 'sv-beam');
+    g += beamSvg(X0, yb, X1, yb, compact);
 
     for (const ld of loads.filter((l) => l.type === 'F')) {
       const xp = X(ld.x);
@@ -224,33 +299,41 @@
 
     if (!compact) {
       const names = supNames(sys);
-      sys.sup.forEach((sp, i) => { front += text(X(sp.x), yb + 44, names[i], 'sv-name', fs); });
       sys.hinges.forEach((h) => { front += text(X(h), yb + 26, 'G', 'sv-name-soft', 13); });
+      // Bemaßung
+      const tickLine = (a, b, yd) => line(a, yd, b, yd, 'sv-dim') + dimTick(a, yd) + dimTick(b, yd);
       if (sym && sys.symDims && sys.symDims.length) {
         for (const d of sys.symDims) {
-          const yd = 236 + (d.row - 1) * 28, a = X(d.x1), b = X(d.x2);
-          g += line(a, yd, b, yd, 'sv-dim') + line(a, yd - 5, a, yd + 5, 'sv-dim') + line(b, yd - 5, b, yd + 5, 'sv-dim');
-          front += text((a + b) / 2, yd - 6, d.label, 'sv-dim-sym', fs + 3);
+          const yd = 238 + (d.row - 1) * 28, a = X(d.x1), b = X(d.x2);
+          g += tickLine(a, b, yd);
+          front += text((a + b) / 2, yd - 7, d.label, 'sv-dim-sym', fs + 3);
         }
       } else {
-        const yd = 240, kp = critPts(sys);
+        const yd = sol ? 262 : 244, kp = critPts(sys);
         g += line(X0, yd, X1, yd, 'sv-dim');
-        for (const k of kp) g += line(X(k), yd - 5, X(k), yd + 5, 'sv-dim');
+        for (const k of kp) g += dimTick(X(k), yd);
         for (let i = 0; i < kp.length - 1; i++) {
           const len = kp[i + 1] - kp[i];
-          if (len > 1e-6) front += text((X(kp[i]) + X(kp[i + 1])) / 2, yd - 6, fmtL(len), 'sv-dim-text', fs - 2);
+          if (len > 1e-6) front += text((X(kp[i]) + X(kp[i + 1])) / 2, yd - 7, fmtL(len), 'sv-dim-text', fs - 2);
         }
-        front += text(X1 + 8, yd + 4, '[m]', 'sv-dim-text', fs - 3, 'start');
+        front += text(X1 + 10, yd + 4, '[m]', 'sv-dim-text', fs - 3, 'start');
       }
       front += text(14, 24, sys.name, 'sv-title', fs - 1, 'start');
-      if (sol) {
-        sys.sup.forEach((sp, i) => {
+      g += axesSvg(W - (narrow ? 64 : 74), 18);
+      // Lagerbezeichnungen bzw. Lagerreaktionen
+      sys.sup.forEach((sp, i) => {
+        const xp = X(sp.x);
+        const end = sp.x < 1e-9 ? -1 : sp.x > L - 1e-9 ? 1 : 0;
+        const side = sp.x > 0.75 * L ? -1 : 1;            // Seite für die Werte
+        const depth = supDepth(sp.type, compact);
+        if (sol) {
+          g += reactionArrows(sys, sol, i, [xp, yb], sp, { compact, inward: [end > 0 ? -1 : 1, 0], end, side, rot: 0 });
           const lines = reactionLines(sys, sol, i, names);
-          const right = sp.x > 0.75 * L;
-          const xt = X(sp.x) + (right ? -22 : 22);
-          lines.forEach((s, k) => { front += text(xt, yb + 18 + k * (fs + 1), s, 'sv-react', fs - 2, right ? 'end' : 'start'); });
-        });
-      }
+          lines.forEach((t, k) => { front += text(xp + side * 14, yb + depth + 16 + k * (fs + 1), t, 'sv-react', fs - 2, side > 0 ? 'start' : 'end'); });
+        } else {
+          front += text(xp, yb + depth + 22, names[i], 'sv-name', fs);
+        }
+      });
     }
     return {
       svg: `<svg viewBox="0 0 ${W} ${H}" class="sv sv-system" role="img" aria-label="${esc(sys.name)}">${g}${front}</svg>`,
@@ -266,7 +349,7 @@
     const lh = L * ca, hh = L * sa;
     const narrow = !compact && !!opts.narrow;
     const W = compact ? 400 : narrow ? 520 : 800, H = compact ? 200 : narrow ? 300 : 290;
-    const mL = compact ? 34 : narrow ? 104 : 130, mR = mL, mT = compact ? 52 : 74, mB = compact ? 26 : 74;
+    const mL = compact ? 34 : narrow ? 104 : 130, mR = mL, mT = compact ? 52 : 74, mB = compact ? 26 : sol ? 104 : 74;
     let ux = (W - mL - mR) / lh, uy = (H - mT - mB) / Math.abs(hh);
     if (uy >= ux) uy = ux; else ux = Math.min(ux, uy * 1.6);
     const wDraw = lh * ux, hDraw = Math.abs(hh) * uy;
@@ -302,7 +385,7 @@
       front += text(pm[0], yl, s, 'sv-load-text', fsS);
     }
     const p0 = P(0), p1 = P(L);
-    g += line(p0[0], p0[1], p1[0], p1[1], 'sv-beam');
+    g += beamSvg(p0[0], p0[1], p1[0], p1[1], compact);
 
     for (const ld of loads.filter((l) => l.type === 'F')) {
       const pp = P(ld.x);
@@ -358,39 +441,40 @@
 
     if (!compact) {
       const names = supNames(sys);
+      const bl = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]), bu = [(p1[0] - p0[0]) / bl, (p1[1] - p0[1]) / bl];
       sys.sup.forEach((sp, i) => {
         const p = P(sp.x), ow = sp.x <= L / 2 ? -1 : 1;
         const anc = ow < 0 ? 'end' : 'start';
+        const rot = sp.type === 'losN' || sp.type === 'einsp' ? -aApp : 0;
         if (sol) {
-          const dimSide = hh > 0 ? 1 : -1;
-          if (ow === dimSide) {
-            // am hohen Ende steht die Höhenbemaßung: Werte unter das Lager
-            reactionLines(sys, sol, i, names).forEach((s, k) => { front += text(p[0] - ow * 6, p[1] + 38 + k * 16, s, 'sv-react', 13, anc); });
-          } else {
-            reactionLines(sys, sol, i, names).forEach((s, k) => { front += text(p[0] + ow * 26, p[1] + 8 + k * 16, s, 'sv-react', 13, anc); });
-          }
+          g += reactionArrows(sys, sol, i, p, sp, { compact, inward: ow < 0 ? bu : [-bu[0], -bu[1]], end: ow, side: ow, rot });
+          // Werte neben den Pfeil; bei einer Einspannung am unteren Ende auf die Innenseite (unter den Stab)
+          const low = p[1] >= Math.max(p0[1], p1[1]) - 1e-6;
+          let sd = ow, y0 = p[1] + 26;
+          if (sp.type === 'einsp') { if (low) sd = -ow; else y0 = p[1] + 44; }
+          reactionLines(sys, sol, i, names).forEach((t, k) => { front += text(p[0] + sd * 16, y0 + k * 15, t, 'sv-react', 13, sd < 0 ? 'end' : 'start'); });
         } else front += text(p[0] + ow * 26, p[1] + 10, names[i], 'sv-name', 15, anc);
       });
       // Grundriss-Bemaßung
-      const yd = Math.max(p0[1], p1[1]) + 50;
+      const yd = Math.max(p0[1], p1[1]) + (sol ? 62 : 50);
       if (sym) {
-        g += line(p0[0], yd, p1[0], yd, 'sv-dim') + line(p0[0], yd - 5, p0[0], yd + 5, 'sv-dim') + line(p1[0], yd - 5, p1[0], yd + 5, 'sv-dim');
-        front += text((p0[0] + p1[0]) / 2, yd - 6, 'l', 'sv-dim-sym', 18);
+        g += line(p0[0], yd, p1[0], yd, 'sv-dim') + dimTick(p0[0], yd) + dimTick(p1[0], yd);
+        front += text((p0[0] + p1[0]) / 2, yd - 7, 'l', 'sv-dim-sym', 18);
       } else {
         const kp = critPts(sys);
         g += line(p0[0], yd, p1[0], yd, 'sv-dim');
-        for (const k of kp) g += line(P(k)[0], yd - 5, P(k)[0], yd + 5, 'sv-dim');
+        for (const k of kp) g += dimTick(P(k)[0], yd);
         for (let i = 0; i < kp.length - 1; i++) {
           const len = (kp[i + 1] - kp[i]) * ca;
-          if (len > 1e-6) front += text((P(kp[i])[0] + P(kp[i + 1])[0]) / 2, yd - 6, fmtL(len), 'sv-dim-text', 13);
+          if (len > 1e-6) front += text((P(kp[i])[0] + P(kp[i + 1])[0]) / 2, yd - 7, fmtL(len), 'sv-dim-text', 13);
         }
         front += text(p1[0] + 10, yd + 4, '[m]', 'sv-dim-text', 12, 'start');
       }
       // Höhe am hohen Ende, weit außen
       const yLow = Math.max(p0[1], p1[1]), yHigh = Math.min(p0[1], p1[1]);
-      const dOff = sol ? (narrow ? 76 : 102) : (narrow ? 70 : 92);
+      const dOff = sol ? (narrow ? 84 : 116) : (narrow ? 70 : 92);
       const xv = hh > 0 ? p1[0] + dOff : p0[0] - dOff;
-      g += line(xv, yLow, xv, yHigh, 'sv-dim') + line(xv - 5, yLow, xv + 5, yLow, 'sv-dim') + line(xv - 5, yHigh, xv + 5, yHigh, 'sv-dim');
+      g += line(xv, yLow, xv, yHigh, 'sv-dim') + line(xv - 4, yLow - 4, xv + 4, yLow + 4, 'sv-dim-tick') + line(xv - 4, yHigh - 4, xv + 4, yHigh + 4, 'sv-dim-tick');
       front += text(xv + (hh > 0 ? 8 : -8), (yLow + yHigh) / 2 + 5, sym ? 'h' : fmtL(Math.abs(hh)), sym ? 'sv-dim-sym' : 'sv-dim-text', sym ? 18 : 13, hh > 0 ? 'start' : 'end');
       // Neigungswinkel am unteren Ende
       const rA = 40, po = hh > 0 ? p0 : p1, dir = hh > 0 ? 1 : -1;

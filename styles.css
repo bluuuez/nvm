@@ -237,19 +237,26 @@ kbd {
 
 /* ============================================================ SVG-Rollen */
 .sv text { font-family: var(--font-ui); fill: var(--ink); }
-.sv-beam { stroke: var(--ink); stroke-width: 5; stroke-linecap: round; }
-.sv-sup { fill: var(--sheet); stroke: var(--ink-soft); stroke-width: 1.7; }
-.sv-sup-wall { stroke: var(--ink-soft); stroke-width: 3; }
-.sv-ground { stroke: var(--ink-soft); stroke-width: 1.7; }
-.sv-hatch { stroke: var(--ink-soft); stroke-width: 1.1; }
-.sv-hinge { fill: var(--sheet); stroke: var(--ink); stroke-width: 2.2; }
+.sv-beam { stroke: var(--ink); stroke-width: 4.2; stroke-linecap: butt; }
+.sv-fiber { stroke: var(--ink); stroke-width: 1.1; stroke-dasharray: 6 4; opacity: .75; }
+.sv-sup { fill: var(--sheet); stroke: var(--ink); stroke-width: 1.5; stroke-linejoin: round; }
+.sv-pin { fill: var(--sheet); stroke: var(--ink); stroke-width: 1.5; }
+.sv-sup-wall { stroke: var(--ink); stroke-width: 2.6; stroke-linecap: square; }
+.sv-ground { stroke: var(--ink); stroke-width: 1.5; stroke-linecap: square; }
+.sv-hatch { stroke: var(--ink-soft); stroke-width: 1; }
+.sv-hinge { fill: var(--sheet); stroke: var(--ink); stroke-width: 1.8; }
+.sv-react-arrow line, .sv-react-arc { stroke: var(--react); fill: none; stroke-width: 1.8; }
+.sv-react-arrow polygon { fill: var(--react); stroke: var(--react); stroke-width: .5; }
+.sv-axes line { stroke: var(--ink-soft); }
+.sv-axes polygon { fill: var(--ink-soft); stroke: none; }
+.sv-dim-tick { stroke: var(--ink-soft); stroke-width: 1.3; }
 .sv-load line, .sv-load polyline { stroke: var(--load); }
 .sv-load polygon { fill: var(--load); stroke: var(--load); stroke-width: .5; }
 .sv-load-line { stroke: var(--load); stroke-width: 1.8; }
 .sv-qfill { fill: var(--load); opacity: .1; }
 .sv-mband { fill: color-mix(in srgb, var(--load) 6%, transparent); stroke: var(--load); stroke-width: 1; }
 .sv-noFill { fill: none; stroke: var(--load); }
-.sv-dim { stroke: var(--ink-soft); stroke-width: 1; }
+.sv-dim { stroke: var(--ink-soft); stroke-width: .9; }
 .sv-angle { fill: none; stroke: var(--load); stroke-width: 1.5; }
 .sv-axis { stroke: var(--ink-soft); stroke-width: 1.4; }
 text.sv-load-text, text.sv-angle-text { fill: var(--load); font-weight: 600; }

@@ -321,20 +321,28 @@ text.sv-cross-text { font-weight: 700; pointer-events: none; }
 .mode-learn { border: 1.5px solid var(--line); border-radius: var(--radius); background: var(--sheet); box-shadow: var(--shadow); }
 .mode-learn:hover { border-color: var(--ink); }
 .mode-learn .mode { border: 0; background: transparent; box-shadow: none; }
-.learn-opts { display: grid; gap: 8px; padding: 0 18px 14px; }
+.learn-opts { display: grid; gap: 8px; padding: 0 18px 16px; }
+.learn-hint { margin: -4px 0 2px; color: var(--ink-soft); font-size: .9rem; }
+.level-desc { margin: 0; padding: 8px 10px; border-left: 3px solid var(--line); color: var(--ink-soft); font-size: .93rem; line-height: 1.45; }
+.level-desc strong { color: var(--ink); font-weight: 600; }
+.learn-warn { margin: 0; padding: 8px 10px; border-left: 3px solid var(--bad); background: color-mix(in srgb, var(--bad) 7%, transparent); font-size: .93rem; }
 
 .settings { grid-area: settings; display: flex; flex-direction: column; gap: 14px; }
 .settings h2 { font-size: 1.4rem; }
+.settings h3 { margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 1.1rem; }
+.settings-note { margin: -8px 0 0; color: var(--ink-soft); font-size: .93rem; }
+.seg-help { width: 100%; margin-top: 2px; color: var(--ink-soft); font-size: .85rem; }
 .seg { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .seg-label { width: 100%; margin-bottom: 2px; color: var(--ink-soft); font-size: .9rem; font-weight: 600; }
-.learn-opts .seg-label { width: 76px; margin: 0; }
+.learn-opts .seg { position: relative; padding-left: 108px; }
+.learn-opts .seg-label { position: absolute; left: 0; top: 7px; width: 104px; margin: 0; }
 .seg button {
   padding: 6px 11px; border: 1.5px solid var(--line); border-radius: 999px;
   background: var(--sheet); cursor: pointer; font-size: .95rem; font-weight: 600;
 }
 .seg button:hover:not(:disabled) { border-color: var(--ink); }
 .seg button:disabled { opacity: .35; cursor: not-allowed; }
-.seg button[aria-checked="true"] { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+.seg button[aria-checked="true"], .seg button[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: var(--paper); }
 .stats { margin: 6px 0 0; color: var(--ink-soft); }
 .keys { margin: 0; color: var(--ink-soft); font-size: .9rem; line-height: 1.9; }
 
@@ -420,7 +428,8 @@ text.sv-cross-text { font-weight: 700; pointer-events: none; }
   .answer .val { height: 96px; min-height: 0; font-size: 1.45rem; }
   .answer .tag { top: 7px; right: 8px; font-size: .78rem; }
   .solution svg { max-height: none; }
-  .learn-opts .seg-label { width: 100%; }
+  .learn-opts .seg { padding-left: 0; }
+  .learn-opts .seg-label { position: static; width: 100%; }
   .boss-page { margin: 0; padding: 28px 22px; }
 }
 @media (prefers-reduced-motion: reduce) {

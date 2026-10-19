@@ -13,25 +13,38 @@
   function save(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { /* privat / gesperrt */ } }
   const settings = load('nvm.settings', {
     time: 'auto', calc: 'formel', incl: 'mix', theme: document.documentElement.dataset.theme || 'light',
-    sound: false, plot: 'tum', learnQty: 'mix', learnTask: 'mix', learnKind: 'alle', learnLevel: '2'
+    sound: false, plot: 'tum', learnQtys: ['N', 'V', 'M'], learnTasks: ['verlauf', 'system', 'max', 'null', 'werte'], learnKinds: ['eft', 'krag', 'ueber', 'gerber'], learnLevel: '2'
   });
   // Werte aus älteren Versionen übernehmen
   settings.theme = { paper: 'light', board: 'dark' }[settings.theme] || settings.theme;
   if (settings.theme !== 'light' && settings.theme !== 'dark') settings.theme = 'light';
-  if (settings.learnQty === 'wert') { settings.learnQty = 'mix'; settings.learnTask = 'werte'; }
-  if (settings.learnTask === 'tippen') settings.learnTask = 'max';
+  // Einzelauswahl der älteren Versionen in Mehrfachauswahl übertragen
+  if ('learnQty' in settings) {
+    const q = settings.learnQty, t = settings.learnTask, k = settings.learnKind;
+    settings.learnQtys = q === 'mix' || q === 'wert' ? ['N', 'V', 'M'] : [q];
+    settings.learnTasks = q === 'wert' ? ['werte'] : t === 'tippen' ? ['max', 'null'] : !t || t === 'mix' ? ['verlauf', 'system', 'max', 'null', 'werte'] : [t];
+    settings.learnKinds = !k || k === 'alle' || k === 'schraeg' ? ['eft', 'krag', 'ueber', 'gerber'] : [k];
+    if (k === 'schraeg') settings.incl = 'nur';
+    delete settings.learnQty; delete settings.learnTask; delete settings.learnKind;
+  }
+  const MULTI = { learnQtys: ['N', 'V', 'M'], learnTasks: ['verlauf', 'system', 'max', 'null', 'werte'], learnKinds: ['eft', 'krag', 'ueber', 'gerber'] };
+  for (const k of Object.keys(MULTI)) {
+    if (!Array.isArray(settings[k])) settings[k] = MULTI[k].slice();
+    settings[k] = settings[k].filter((v) => MULTI[k].includes(v));
+    if (!settings[k].length) settings[k] = MULTI[k].slice();
+  }
   const stats = load('nvm.stats', { best: 0, total: 0, correct: 0 });
   delete stats.bestExam;
 
-  // Lernmodus: Tragwerk für den Generator („Schräg“ heißt: alle Arten, nur schief)
-  const learnKind = () => (settings.learnKind === 'schraeg' ? 'alle' : settings.learnKind);
-  const taskExists = (task, qty = settings.learnQty, kind = learnKind()) => task === 'mix' || N.typePool(1, qty, task, kind).length > 0;
+  // Lernmodus: alle Aufgaben, die zur Auswahl passen
+  const learnPool = () => N.learnPool(settings.learnQtys, settings.learnTasks, settings.learnKinds);
+  const taskExists = (task) => N.learnPool(settings.learnQtys, [task], settings.learnKinds).length > 0;
 
   // ---------------------------------------------------------- Zustand
   const S = {
     mode: 'arcade', state: 'menu', q: null, level: 1, score: 0, lives: 3, streak: 0, bestStreak: 0,
     nCorrect: 0, nAsked: 0, mistakes: {}, tMax: 30, tLeft: 30, timed: false,
-    solShown: false, chosen: -1, clickS: NaN, lastPts: 0, pendingEnd: false, levelUp: '',
+    solShown: false, chosen: -1, clickS: NaN, lastType: '', lastPts: 0, pendingEnd: false, levelUp: '',
     map: null, boss: false, cheatFrom: 'menu', fresh: true
   };
   const narrowMQ = window.matchMedia('(max-width: 640px)');
@@ -83,27 +96,39 @@
   }
   function syncSegs() {
     document.querySelectorAll('.seg[data-setting]').forEach((seg) => {
-      const key = seg.dataset.setting;
+      const key = seg.dataset.setting, multi = seg.hasAttribute('data-multi');
       seg.querySelectorAll('button').forEach((b) => {
-        b.setAttribute('role', 'radio');
-        b.setAttribute('aria-checked', String(String(settings[key]) === b.dataset.v));
+        if (multi) {
+          // Aufgaben ohne passende Kombination ausgrauen (z. B. N + Maximum antippen); die Wahl bleibt gespeichert
+          const can = key !== 'learnTasks' || taskExists(b.dataset.v);
+          b.disabled = !can;
+          b.title = can ? '' : 'Gibt es für die gewählten Schnittgrößen und Tragwerke nicht';
+          b.setAttribute('aria-pressed', String(can && settings[key].includes(b.dataset.v)));
+        } else {
+          b.setAttribute('role', 'radio');
+          b.setAttribute('aria-checked', String(String(settings[key]) === b.dataset.v));
+        }
       });
     });
-    // Aufgaben, die es für Größe und Tragwerk nicht gibt, ausgrauen (z. B. N + Maximum antippen)
-    document.querySelectorAll('.seg[data-setting="learnTask"] button').forEach((b) => {
-      const can = taskExists(b.dataset.v);
-      b.disabled = !can;
-      b.title = can ? '' : 'Diese Kombination gibt es nicht';
-    });
+    const lv = Number(settings.learnLevel), info = N.levelInfo(lv);
+    $('levelDesc').innerHTML = `<strong>Stufe ${lv}, ${esc(info.name)}:</strong> ${esc(info.loads)} Die Stufe bestimmt Zahl und Art der Lasten, die Tragwerke wählst du oben.`;
+    const empty = !learnPool().length;
+    $('learnWarn').hidden = !empty;
+    $('learnWarn').textContent = empty ? 'Für diese Auswahl gibt es keine Aufgaben. Wähle eine weitere Schnittgröße, Aufgabe oder ein anderes Tragwerk.' : '';
     $('soundBtn').setAttribute('aria-pressed', String(!!settings.sound));
   }
   document.querySelectorAll('.seg[data-setting]').forEach((seg) => {
     seg.addEventListener('click', (e) => {
       const b = e.target.closest('button');
       if (!b) return;
-      settings[seg.dataset.setting] = b.dataset.v;
-      // Größe/Tragwerk gewechselt und die Aufgabe passt nicht mehr: Aufgabe auf „Gemischt“
-      if (!taskExists(settings.learnTask)) settings.learnTask = 'mix';
+      const key = seg.dataset.setting;
+      if (seg.hasAttribute('data-multi')) {
+        const cur = settings[key], v = b.dataset.v;
+        if (cur.includes(v)) {
+          if (cur.length === 1) { toast('Mindestens eins muss ausgewählt sein'); return; }
+          settings[key] = cur.filter((x) => x !== v);
+        } else settings[key] = MULTI[key].filter((x) => cur.includes(x) || x === v);
+      } else settings[key] = b.dataset.v;
       save('nvm.settings', settings);
       if (seg.dataset.setting === 'theme') applyTheme();
       if (seg.dataset.setting === 'plot') applyPlot();
@@ -116,8 +141,7 @@
     if (settings.incl === 'aus') incl = 0;
     else if (settings.incl === 'nur') incl = 1;
     else incl = S.level >= 2 ? 0.3 : 0.12;
-    if (S.mode === 'learn' && settings.learnKind === 'schraeg') incl = 1;
-    return { calc: settings.calc, incl, task: S.mode === 'learn' ? settings.learnTask : 'mix' };
+    return { calc: settings.calc, incl, task: 'mix' };
   }
   function timeFor() {
     if (settings.time === 'inf') return Infinity;
@@ -154,17 +178,27 @@
       mode: m, score: 0, lives: 3, streak: 0, bestStreak: 0, nCorrect: 0, nAsked: 0,
       mistakes: {}, pendingEnd: false, levelUp: ''
     });
+    if (m === 'learn' && !learnPool().length) { toast('Für diese Auswahl gibt es keine Aufgaben'); return; }
     S.level = m === 'learn' ? Number(settings.learnLevel) : 1;
-    if (m === 'learn' && !taskExists(settings.learnTask)) { settings.learnTask = 'mix'; save('nvm.settings', settings); }
+    S.lastType = '';
     showScreen('app');
     nextQuestion();
   }
 
   function nextQuestion(force) {
-    const learn = S.mode === 'learn';
-    const qty = learn ? settings.learnQty : 'mix', kind = learn ? learnKind() : 'alle';
     S.tMax = timeFor(); S.timed = isFinite(S.tMax); S.tLeft = S.tMax;
-    S.q = N.buildQuestion(S.level, qty, kind, force || '', cfg());
+    const c = cfg();
+    if (force) S.q = N.buildQuestion(S.level, 'mix', 'alle', force, c);
+    else if (S.mode === 'learn') {
+      const p = N.nextPick(learnPool(), S.lastType);
+      S.q = N.buildQuestion(S.level, p.qty, p.kind, p.type, Object.assign(c, { task: p.task }));
+    } else {
+      // Arcade: alles gemischt, aber nicht zweimal derselbe Aufgabentyp hintereinander
+      let t = N.pickType(S.level, 'mix', 'mix', 'alle');
+      for (let i = 0; i < 12 && t === S.lastType; i++) t = N.pickType(S.level, 'mix', 'mix', 'alle');
+      S.q = N.buildQuestion(S.level, 'mix', 'alle', t, c);
+    }
+    S.lastType = S.q.type;
     S.state = 'question'; S.solShown = false; S.chosen = -1; S.clickS = NaN; S.fresh = true;
     $('timer').hidden = !S.timed;
     $('timerFill').style.transform = 'scaleX(1)';
@@ -313,7 +347,11 @@
         S.lastPts = Math.round((100 * S.level + tb) * mult);
         S.score += S.lastPts;
         const nl = Math.min(6, 1 + Math.floor(S.nCorrect / 5));
-        if (nl > S.level) { S.level = nl; S.levelUp = `Level ${nl}. Die Tragwerke werden kniffliger.`; }
+        if (nl > S.level) {
+          S.level = nl;
+          const info = N.levelInfo(nl);
+          S.levelUp = nl <= 5 ? `Level ${nl}, ${info.name}: ${info.loads}` : `Level ${nl}: wie Stufe 5, aber mit weniger Zeit.`;
+        }
       }
     } else {
       S.streak = 0;
@@ -366,10 +404,11 @@
     const tStr = S.timed ? `${Math.round(S.tMax)} Sekunden` : 'kein Zeitlimit';
     if (S.mode === 'arcade') mode = `Arcade, ${tStr}. Punkte gibt es für Level und Tempo, eine Serie richtiger Antworten verdoppelt sie.`;
     else {
-      const qn = { mix: '', N: 'Normalkraft', V: 'Querkraft', M: 'Moment' }[settings.learnQty] || '';
-      const tn = { mix: '', verlauf: 'Verlauf zum System', system: 'System zum Verlauf', max: 'Maximum antippen', null: 'Nullstelle antippen', werte: 'Werte' }[settings.learnTask] || '';
-      const focus = [qn, tn].filter(Boolean).join(', ');
-      mode = `Lernen${focus ? ` (${focus})` : ''}, ${tStr}. Nach jeder Antwort bekommst du die Erklärung.`;
+      const TN = { verlauf: 'Verlauf zum System', system: 'System zum Verlauf', max: 'Maximum antippen', null: 'Nullstelle antippen', werte: 'Werte bestimmen' };
+      const qs = settings.learnQtys.length < 3 ? settings.learnQtys.join(', ') : '';
+      const ts = settings.learnTasks.length < 5 ? settings.learnTasks.map((t) => TN[t]).join(', ') : '';
+      const focus = [qs, ts].filter(Boolean).join(' · ');
+      mode = `Lernen, Stufe ${S.level}${focus ? ` (${focus})` : ''}, ${tStr}. Nach jeder Antwort bekommst du die Erklärung.`;
     }
     let extra = '';
     if (q.symbolic) extra = '<p class="muted">Die Maße sind als Buchstaben angegeben – gesucht ist die passende Formel.</p>';

@@ -107,30 +107,33 @@
       <div class="modes">
         <button class="mode mode-main" type="button" data-mode="arcade">
           <span class="mode-name">Arcade spielen</span>
-          <span class="mode-desc">Drei Leben, Zeitlimit und Level, die immer kniffliger werden.</span>
+          <span class="mode-desc">Drei Leben und Zeitlimit. Alles gemischt, alle fünf richtigen Antworten steigt das Level.</span>
         </button>
         <div class="mode-learn">
           <button class="mode" type="button" data-mode="learn">
             <span class="mode-name">Lernen</span>
-            <span class="mode-desc">Ohne Druck, nach jeder Antwort mit Erklärung.</span>
+            <span class="mode-desc" id="learnDesc">Ohne Druck, nach jeder Antwort mit Erklärung.</span>
           </button>
           <div class="learn-opts">
-            <div class="seg" data-setting="learnQty" role="radiogroup" aria-label="Schnittgröße">
-              <span class="seg-label">Größe</span>
-              <button type="button" data-v="mix">Alles</button><button type="button" data-v="N">N</button><button type="button" data-v="V">V</button><button type="button" data-v="M">M</button>
+            <p class="learn-hint">Mehrfachauswahl: Tippe an, was du üben willst.</p>
+            <div class="seg" data-setting="learnQtys" data-multi role="group" aria-label="Schnittgrößen">
+              <span class="seg-label">Schnittgrößen</span>
+              <button type="button" data-v="N">N</button><button type="button" data-v="V">V</button><button type="button" data-v="M">M</button>
             </div>
-            <div class="seg" data-setting="learnTask" role="radiogroup" aria-label="Aufgabe">
-              <span class="seg-label">Aufgabe</span>
-              <button type="button" data-v="mix">Gemischt</button><button type="button" data-v="verlauf">Verlauf zum System</button><button type="button" data-v="system">System zum Verlauf</button><button type="button" data-v="max">Maximum antippen</button><button type="button" data-v="null">Nullstelle antippen</button><button type="button" data-v="werte">Werte</button>
+            <div class="seg" data-setting="learnTasks" data-multi role="group" aria-label="Aufgaben">
+              <span class="seg-label">Aufgaben</span>
+              <button type="button" data-v="verlauf">Verlauf zum System</button><button type="button" data-v="system">System zum Verlauf</button><button type="button" data-v="max">Maximum antippen</button><button type="button" data-v="null">Nullstelle antippen</button><button type="button" data-v="werte">Werte bestimmen</button>
             </div>
-            <div class="seg" data-setting="learnKind" role="radiogroup" aria-label="Tragwerk">
-              <span class="seg-label">Tragwerk</span>
-              <button type="button" data-v="alle">Alle</button><button type="button" data-v="eft">Einfeld</button><button type="button" data-v="krag">Kragarm</button><button type="button" data-v="ueber">Mit Kragarm</button><button type="button" data-v="gerber">Gerber</button><button type="button" data-v="schraeg">Schräg</button>
+            <div class="seg" data-setting="learnKinds" data-multi role="group" aria-label="Tragwerke">
+              <span class="seg-label">Tragwerke</span>
+              <button type="button" data-v="eft">Einfeldträger</button><button type="button" data-v="krag">Kragarm</button><button type="button" data-v="ueber">Mit Kragarm</button><button type="button" data-v="gerber">Gerberträger</button>
             </div>
             <div class="seg" data-setting="learnLevel" role="radiogroup" aria-label="Stufe">
               <span class="seg-label">Stufe</span>
               <button type="button" data-v="1">1</button><button type="button" data-v="2">2</button><button type="button" data-v="3">3</button><button type="button" data-v="4">4</button><button type="button" data-v="5">5</button>
             </div>
+            <p class="level-desc" id="levelDesc" aria-live="polite"></p>
+            <p class="learn-warn" id="learnWarn" hidden></p>
           </div>
         </div>
         <button class="mode mode-quiet" type="button" data-mode="cheat">
@@ -141,18 +144,24 @@
 
       <div class="settings">
         <h2>Einstellungen</h2>
+        <p class="settings-note">Gelten für Arcade und Lernen.</p>
+        <h3>Aufgaben</h3>
         <div class="seg" data-setting="time" role="radiogroup" aria-label="Zeit pro Aufgabe">
           <span class="seg-label">Zeit pro Aufgabe</span>
           <button type="button" data-v="auto">Auto</button><button type="button" data-v="10">10 s</button><button type="button" data-v="20">20 s</button><button type="button" data-v="30">30 s</button><button type="button" data-v="60">60 s</button><button type="button" data-v="120">120 s</button><button type="button" data-v="inf">Ohne</button>
+          <span class="seg-help">Auto: im Arcade-Modus kürzer werdend, beim Lernen ohne Limit.</span>
         </div>
-        <div class="seg" data-setting="calc" role="radiogroup" aria-label="Werte-Aufgaben">
-          <span class="seg-label">Werte-Aufgaben</span>
-          <button type="button" data-v="formel">Formeln anklicken</button><button type="button" data-v="einfach">Kopfrechnen</button><button type="button" data-v="rechner">Taschenrechner</button>
+        <div class="seg" data-setting="calc" role="radiogroup" aria-label="Werte bestimmen">
+          <span class="seg-label">Werte bestimmen</span>
+          <button type="button" data-v="formel">Formel anklicken</button><button type="button" data-v="einfach">Kopfrechnen</button><button type="button" data-v="rechner">Taschenrechner</button>
+          <span class="seg-help">Wie die Aufgaben zu Auflagerkräften und |M|max gestellt werden.</span>
         </div>
         <div class="seg" data-setting="incl" role="radiogroup" aria-label="Schiefe Stäbe">
           <span class="seg-label">Schiefe Stäbe</span>
-          <button type="button" data-v="mix">Gemischt</button><button type="button" data-v="aus">Aus</button><button type="button" data-v="nur">Nur schief</button>
+          <button type="button" data-v="aus">Aus</button><button type="button" data-v="mix">Ab und zu</button><button type="button" data-v="nur">Nur schief</button>
+          <span class="seg-help">Schief gibt es als Einfeldträger und Kragarm.</span>
         </div>
+        <h3>Darstellung</h3>
         <div class="seg" data-setting="plot" role="radiogroup" aria-label="Verläufe antragen">
           <span class="seg-label">Verläufe antragen</span>
           <button type="button" data-v="tum">Positiv unten (TUM)</button><button type="button" data-v="classic">V und N positiv oben</button>

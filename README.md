@@ -15,10 +15,15 @@ Einstellungen nur im eigenen Browser.
 
 ## Modi
 
-- **Arcade:** drei Leben, Zeitlimit, steigende Level, Highscore
-- **Lernen:** gezielt üben – Größe (N, V, M), Aufgabe (Verlauf zum System, System zum Verlauf,
-  Maximum antippen, Nullstelle antippen, Werte), Tragwerk und Stufe frei wählbar,
-  Erklärung nach jeder Antwort
+- **Arcade:** drei Leben, Zeitlimit, alles gemischt, nie zweimal derselbe Aufgabentyp
+  hintereinander; alle fünf richtigen Antworten steigt das Level
+- **Lernen:** Mehrfachauswahl von Schnittgrößen (N, V, M), Aufgaben (Verlauf zum System,
+  System zum Verlauf, Maximum antippen, Nullstelle antippen, Werte bestimmen) und Tragwerken,
+  dazu eine Stufe; Erklärung nach jeder Antwort
+
+Stufen: 1 Einstieg (eine Einzel- oder Gleichstreckenlast), 2 Grundlagen (auch Teil-, Dreiecks-,
+Einzel- und Linienmomentlasten), 3 Fortgeschritten (ein bis zwei Lasten, auch schräge und
+waagerechte Kräfte), 4 Klausurniveau (zwei Lasten), 5 Profi (zwei bis drei Lasten).
 - **Spickzettel:** Vorzeichen, Beziehungen, Standardfälle
 
 Einstellungen: Zeit pro Aufgabe, Werte-Aufgaben als Formeln, mit glatten Zahlen oder mit

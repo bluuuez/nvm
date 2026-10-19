@@ -1049,6 +1049,30 @@
     if (!ts.length) ts = typePool(level, 'mix', task, kind);   // z. B. N + Stelle antippen
     return pick(ts);
   }
+  // Lernmodus mit Mehrfachauswahl: alle passenden Kombinationen aus Schnittgröße, Aufgabe und Tragwerk
+  function learnPool(qtys, tasks, kinds) {
+    const pool = [];
+    for (const task of tasks) for (const qty of qtys) for (const kind of kinds) {
+      for (const type of new Set(typePool(1, qty, task, kind))) pool.push({ type, qty, task, kind });
+    }
+    return pool;
+  }
+  // Nächster Aufgabentyp: nicht zweimal derselbe hintereinander, solange es Alternativen gibt
+  function nextPick(pool, lastType) {
+    const other = pool.filter((p) => p.type !== lastType);
+    return pick(other.length ? other : pool);
+  }
+
+  // Was die Stufen am Zufallsgenerator ändern (siehe genSystem)
+  const LEVEL_INFO = [
+    { name: 'Einstieg', systems: 'Einfeldträger und Kragarm', loads: 'Genau eine Last: Einzellast oder Gleichstreckenlast über die ganze Länge.' },
+    { name: 'Grundlagen', systems: 'dazu Träger mit Kragarm', loads: 'Eine Last, jetzt auch Teilstreckenlast, Dreieckslast, Einzelmoment oder Linienmoment.' },
+    { name: 'Fortgeschritten', systems: 'dazu Gerberträger', loads: 'Ein bis zwei Lasten, auch schräge und waagerechte Einzelkräfte.' },
+    { name: 'Klausurniveau', systems: 'alle, häufiger mit Kragarm und Gelenk', loads: 'Immer zwei Lasten aller Arten.' },
+    { name: 'Profi', systems: 'alle', loads: 'Zwei bis drei Lasten aller Arten.' }
+  ];
+  const levelInfo = (lv) => LEVEL_INFO[Math.max(1, Math.min(5, lv)) - 1];
+
   const isClickType = (t) => ['clickMmax', 'clickVmax', 'clickV0', 'clickM0'].includes(t);
   const isValType = (t) => ['valMax', 'valR'].includes(t);
 
@@ -1574,7 +1598,7 @@
     fmt, fmtL, fmtN,
     mkLoad, mkSup, baseSys, setIncline, isIncl, genSystem,
     loadArrays, solveSys, sgAt, sgArr, eqVec, curves, critPts, distRes, pickQ,
-    systemMods, classicCase, classicItem, buildQuestion, pickType, typePool, isClickType, isValType,
+    systemMods, classicCase, classicItem, buildQuestion, pickType, typePool, learnPool, nextPick, LEVEL_INFO, levelInfo, isClickType, isValType,
     clusterRanges, supNames, explainSystem, momentAtSupport,
     tagExpl, tagLabel, praise, randomTip, rankName, RULES, cheatCases
   };

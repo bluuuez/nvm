@@ -12,11 +12,12 @@
   }
   function save(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { /* privat / gesperrt */ } }
   const settings = load('nvm.settings', {
-    time: 'auto', calc: 'formel', incl: 'mix', theme: document.documentElement.dataset.theme || 'light',
+    time: 'inf', calc: 'formel', incl: 'mix', theme: document.documentElement.dataset.theme || 'light',
     sound: false, plot: 'tum', learnQtys: ['N', 'V', 'M'], learnTasks: ['verlauf', 'system', 'max', 'null', 'werte'], learnKinds: ['eft', 'krag', 'ueber', 'gerber'], learnLevel: '2'
   });
   // Werte aus älteren Versionen übernehmen
   settings.theme = { paper: 'light', board: 'dark' }[settings.theme] || settings.theme;
+  if (settings.time === 'auto') settings.time = 'inf';   // „Auto“ gibt es nur noch im Arcade-Modus
   if (settings.theme !== 'light' && settings.theme !== 'dark') settings.theme = 'light';
   // Einzelauswahl der älteren Versionen in Mehrfachauswahl übertragen
   if ('learnQty' in settings) {
@@ -136,18 +137,20 @@
     });
   });
 
+  // Arcade hat feste Regeln (für alle gleich, wegen der Bestenliste); die Aufgaben-Einstellungen gelten nur fürs Lernen
+  const ARCADE = { calc: 'einfach', incl: 'mix' };
   function cfg() {
+    const arcade = S.mode === 'arcade';
+    const mode = arcade ? ARCADE.incl : settings.incl;
     let incl;
-    if (settings.incl === 'aus') incl = 0;
-    else if (settings.incl === 'nur') incl = 1;
+    if (mode === 'aus') incl = 0;
+    else if (mode === 'nur') incl = 1;
     else incl = S.level >= 2 ? 0.3 : 0.12;
-    return { calc: settings.calc, incl, task: 'mix' };
+    return { calc: arcade ? ARCADE.calc : settings.calc, incl, task: 'mix' };
   }
   function timeFor() {
-    if (settings.time === 'inf') return Infinity;
-    if (settings.time !== 'auto') return Number(settings.time);
     if (S.mode === 'arcade') return Math.max(15, 34 - 3 * S.level);
-    return Infinity;
+    return settings.time === 'inf' ? Infinity : Number(settings.time) || Infinity;
   }
 
   // ---------------------------------------------------------- Menü

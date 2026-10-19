@@ -29,9 +29,11 @@ waagerechte Kräfte), 4 Klausurniveau (zwei Lasten), 5 Profi (zwei bis drei Last
 - **Bestenliste:** nach dem Arcade einen Namen eintragen (Filter gegen Beleidigungen in App und
   Datenbank) und sehen, auf welchem Platz man steht
 
-Einstellungen: Zeit pro Aufgabe, Werte-Aufgaben als Formeln, mit glatten Zahlen oder mit
-Taschenrechner, schiefe Stäbe gemischt/aus/nur schief, Verläufe positiv zur gestrichelten Faser
-(TUM) oder V und N positiv oben, Hell oder Dunkel.
+Arcade läuft für alle gleich, damit die Bestenliste fair ist: Zeit wird mit dem Level kürzer,
+Werte im Kopf rechnen, ab und zu schiefe Stäbe. Beim Lernen einstellbar: Zeit pro Aufgabe,
+Werte-Aufgaben als Formeln, mit glatten Zahlen oder mit Taschenrechner, schiefe Stäbe
+aus/ab und zu/nur schief. Für beide Modi: Verläufe positiv zur gestrichelten Faser (TUM) oder
+V und N positiv oben, Hell oder Dunkel.
 
 ## Statik
 

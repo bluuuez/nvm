@@ -107,7 +107,7 @@
       <div class="modes">
         <button class="mode mode-main" type="button" data-mode="arcade">
           <span class="mode-name">Arcade spielen</span>
-          <span class="mode-desc">Drei Leben und Zeitlimit. Alles gemischt, alle fünf richtigen Antworten steigt das Level.</span>
+          <span class="mode-desc">Drei Leben und Zeitlimit. Alles gemischt, alle fünf richtigen Antworten steigt das Level. Für alle gleich, damit die Bestenliste fair ist: Werte im Kopf rechnen, ab und zu schiefe Stäbe.</span>
         </button>
         <div class="mode-learn">
           <button class="mode" type="button" data-mode="learn">
@@ -133,6 +133,20 @@
               <button type="button" data-v="1">1</button><button type="button" data-v="2">2</button><button type="button" data-v="3">3</button><button type="button" data-v="4">4</button><button type="button" data-v="5">5</button>
             </div>
             <p class="level-desc" id="levelDesc" aria-live="polite"></p>
+            <div class="seg" data-setting="time" role="radiogroup" aria-label="Zeit pro Aufgabe">
+              <span class="seg-label">Zeit pro Aufgabe</span>
+              <button type="button" data-v="inf">Ohne</button><button type="button" data-v="10">10 s</button><button type="button" data-v="20">20 s</button><button type="button" data-v="30">30 s</button><button type="button" data-v="60">60 s</button><button type="button" data-v="120">120 s</button>
+            </div>
+            <div class="seg" data-setting="calc" role="radiogroup" aria-label="Werte bestimmen">
+              <span class="seg-label">Werte bestimmen</span>
+              <button type="button" data-v="formel">Formel anklicken</button><button type="button" data-v="einfach">Kopfrechnen</button><button type="button" data-v="rechner">Taschenrechner</button>
+              <span class="seg-help">Wie die Aufgaben zu Auflagerkräften und |M|max gestellt werden.</span>
+            </div>
+            <div class="seg" data-setting="incl" role="radiogroup" aria-label="Schiefe Stäbe">
+              <span class="seg-label">Schiefe Stäbe</span>
+              <button type="button" data-v="aus">Aus</button><button type="button" data-v="mix">Ab und zu</button><button type="button" data-v="nur">Nur schief</button>
+              <span class="seg-help">Schief gibt es als Einfeldträger und Kragarm.</span>
+            </div>
             <p class="learn-warn" id="learnWarn" hidden></p>
           </div>
         </div>
@@ -149,23 +163,6 @@
       <div class="settings">
         <h2>Einstellungen</h2>
         <p class="settings-note">Gelten für Arcade und Lernen.</p>
-        <h3>Aufgaben</h3>
-        <div class="seg" data-setting="time" role="radiogroup" aria-label="Zeit pro Aufgabe">
-          <span class="seg-label">Zeit pro Aufgabe</span>
-          <button type="button" data-v="auto">Auto</button><button type="button" data-v="10">10 s</button><button type="button" data-v="20">20 s</button><button type="button" data-v="30">30 s</button><button type="button" data-v="60">60 s</button><button type="button" data-v="120">120 s</button><button type="button" data-v="inf">Ohne</button>
-          <span class="seg-help">Auto: im Arcade-Modus kürzer werdend, beim Lernen ohne Limit.</span>
-        </div>
-        <div class="seg" data-setting="calc" role="radiogroup" aria-label="Werte bestimmen">
-          <span class="seg-label">Werte bestimmen</span>
-          <button type="button" data-v="formel">Formel anklicken</button><button type="button" data-v="einfach">Kopfrechnen</button><button type="button" data-v="rechner">Taschenrechner</button>
-          <span class="seg-help">Wie die Aufgaben zu Auflagerkräften und |M|max gestellt werden.</span>
-        </div>
-        <div class="seg" data-setting="incl" role="radiogroup" aria-label="Schiefe Stäbe">
-          <span class="seg-label">Schiefe Stäbe</span>
-          <button type="button" data-v="aus">Aus</button><button type="button" data-v="mix">Ab und zu</button><button type="button" data-v="nur">Nur schief</button>
-          <span class="seg-help">Schief gibt es als Einfeldträger und Kragarm.</span>
-        </div>
-        <h3>Darstellung</h3>
         <div class="seg" data-setting="plot" role="radiogroup" aria-label="Verläufe antragen">
           <span class="seg-label">Verläufe antragen</span>
           <button type="button" data-v="tum">Positiv unten (TUM)</button><button type="button" data-v="classic">V und N positiv oben</button>

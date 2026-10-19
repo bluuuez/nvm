@@ -35,6 +35,8 @@ Taschenrechner, schiefe Stäbe gemischt/aus/nur schief, Hell oder Dunkel.
 - `js/draw.js` – Systeme und Verläufe als SVG
 - `js/app.js` – Oberfläche und Spielablauf
 - `sw.js` – Offline-Modus
-- `fonts/` – Barlow und Barlow Semi Condensed (SIL Open Font License, `fonts/OFL.txt`)
+- `js/math.js` – Formelsatz: erkennt Formeln in den Texten und setzt sie mit KaTeX
+- `katex/` – KaTeX 0.16 (MIT-Lizenz), lokal für den Offline-Betrieb
+- `fonts/` – Source Sans 3, Source Serif 4, Barlow Semi Condensed (SIL Open Font License, `fonts/OFL-*.txt`)
 - `icons/` – App-Icons für Home-Bildschirm
 - `styles.css`, `fonts.css`, `index.html`, `icon.svg`, `manifest.webmanifest`

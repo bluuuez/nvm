@@ -15,11 +15,17 @@
     time: 'auto', calc: 'formel', incl: 'mix', theme: document.documentElement.dataset.theme || 'light',
     sound: false, learnQty: 'mix', learnTask: 'mix', learnKind: 'alle', learnLevel: '2'
   });
-  if (settings.theme === 'paper') settings.theme = 'light';
-  if (settings.theme === 'board' || (settings.theme !== 'light' && settings.theme !== 'dark')) settings.theme = settings.theme === 'board' ? 'dark' : 'light';
+  // Werte aus älteren Versionen übernehmen
+  settings.theme = { paper: 'light', board: 'dark' }[settings.theme] || settings.theme;
+  if (settings.theme !== 'light' && settings.theme !== 'dark') settings.theme = 'light';
   if (settings.learnQty === 'wert') { settings.learnQty = 'mix'; settings.learnTask = 'werte'; }
   if (settings.learnTask === 'tippen') settings.learnTask = 'max';
-  const stats = load('nvm.stats', { best: 0, bestExam: 6, total: 0, correct: 0 });
+  const stats = load('nvm.stats', { best: 0, total: 0, correct: 0 });
+  delete stats.bestExam;
+
+  // Lernmodus: Tragwerk für den Generator („Schräg“ heißt: alle Arten, nur schief)
+  const learnKind = () => (settings.learnKind === 'schraeg' ? 'alle' : settings.learnKind);
+  const taskExists = (task, qty = settings.learnQty, kind = learnKind()) => task === 'mix' || N.typePool(1, qty, task, kind).length > 0;
 
   // ---------------------------------------------------------- Zustand
   const S = {
@@ -67,8 +73,7 @@
   // ---------------------------------------------------------- Einstellungen
   function applyTheme() {
     document.documentElement.dataset.theme = settings.theme;
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.content = settings.theme === 'dark' ? '#131417' : '#f5f7fa';
+    $('themeColor').content = settings.theme === 'dark' ? '#131417' : '#f5f7fa';
   }
   function syncSegs() {
     document.querySelectorAll('.seg[data-setting]').forEach((seg) => {
@@ -79,16 +84,10 @@
       });
     });
     // Aufgaben, die es für Größe und Tragwerk nicht gibt, ausgrauen (z. B. N + Maximum antippen)
-    const kindOf = (k) => (k === 'schraeg' ? 'alle' : k);
-    const ok = (qty, task, kind) => task === 'mix' || N.typePool(1, qty, task, kindOf(kind)).length > 0;
-    const cur = { learnQty: settings.learnQty, learnTask: settings.learnTask, learnKind: settings.learnKind };
-    ['learnTask'].forEach((key) => {
-      document.querySelectorAll(`.seg[data-setting="${key}"] button`).forEach((b) => {
-        const t = Object.assign({}, cur, { [key]: b.dataset.v });
-        const can = ok(t.learnQty, t.learnTask, t.learnKind);
-        b.disabled = !can;
-        b.title = can ? '' : 'Diese Kombination gibt es nicht';
-      });
+    document.querySelectorAll('.seg[data-setting="learnTask"] button').forEach((b) => {
+      const can = taskExists(b.dataset.v);
+      b.disabled = !can;
+      b.title = can ? '' : 'Diese Kombination gibt es nicht';
     });
     $('soundBtn').setAttribute('aria-pressed', String(!!settings.sound));
   }
@@ -98,7 +97,7 @@
       if (!b) return;
       settings[seg.dataset.setting] = b.dataset.v;
       // Größe/Tragwerk gewechselt und die Aufgabe passt nicht mehr: Aufgabe auf „Gemischt“
-      if (settings.learnTask !== 'mix' && !N.typePool(1, settings.learnQty, settings.learnTask, settings.learnKind === 'schraeg' ? 'alle' : settings.learnKind).length) settings.learnTask = 'mix';
+      if (!taskExists(settings.learnTask)) settings.learnTask = 'mix';
       save('nvm.settings', settings);
       if (seg.dataset.setting === 'theme') applyTheme();
       syncSegs();
@@ -149,20 +148,14 @@
       mistakes: {}, pendingEnd: false, levelUp: ''
     });
     S.level = m === 'learn' ? Number(settings.learnLevel) : 1;
-    if (m === 'learn' && settings.learnTask !== 'mix') {
-      const k = settings.learnKind === 'schraeg' ? 'alle' : settings.learnKind;
-      if (!N.typePool(1, settings.learnQty, settings.learnTask, k).length) { settings.learnTask = 'mix'; save('nvm.settings', settings); }
-    }
+    if (m === 'learn' && !taskExists(settings.learnTask)) { settings.learnTask = 'mix'; save('nvm.settings', settings); }
     showScreen('app');
     nextQuestion();
   }
 
   function nextQuestion(force) {
-    let qty = 'mix', kind = 'alle';
-    if (S.mode === 'learn') {
-      qty = settings.learnQty;
-      kind = settings.learnKind === 'schraeg' ? 'alle' : settings.learnKind;
-    }
+    const learn = S.mode === 'learn';
+    const qty = learn ? settings.learnQty : 'mix', kind = learn ? learnKind() : 'alle';
     S.tMax = timeFor(); S.timed = isFinite(S.tMax); S.tLeft = S.tMax;
     S.q = N.buildQuestion(S.level, qty, kind, force || '', cfg());
     S.state = 'question'; S.solShown = false; S.chosen = -1; S.clickS = NaN; S.fresh = true;
@@ -229,7 +222,7 @@
         if (k === q.correct) { b.classList.add('is-correct'); inner += '<span class="tag">Richtig</span>'; }
         else if (k === S.chosen) { b.classList.add('is-wrong'); inner += '<span class="tag">Deine Wahl</span>'; }
         else b.classList.add('is-dim');
-        if (!S.fresh) b.style.animation = 'none';
+        if (!S.fresh) b.classList.add('no-anim');
       }
       b.innerHTML = inner;
       b.addEventListener('click', () => answer(k));
@@ -267,7 +260,7 @@
       ln.style.display = '';
       ln.setAttribute('x1', p.x); ln.setAttribute('x2', p.x);
       tx.setAttribute('x', p.x);
-      tx.textContent = `x = ${N.fmt(Math.min(Math.max(s, 0), m.L) * ca(), 2)} m`;
+      tx.innerHTML = N.math.svg(`x = ${N.fmt(Math.min(Math.max(s, 0), m.L) * ca(), 2)} m`, esc);
     });
     svg.addEventListener('click', (e) => {
       if (S.state !== 'question' || S.boss) return;
@@ -301,7 +294,6 @@
 
   // ---------------------------------------------------------- Auswertung
   function finish(ok, tag) {
-    const q = S.q;
     S.state = 'feedback';
     S.nAsked++; S.lastPts = 0; S.levelUp = '';
     stats.total++;
@@ -345,7 +337,7 @@
     const o = { values: true, crit, W, H, animate: true };
     let html = '';
     for (const qty of ['N', 'V', 'M']) html += `<div class="strip">${D.diagram(xs, N.pickQ(qty, q.cv), qty, Lp(), o)}</div>`;
-    if (N.isIncl(q.sys)) html += '<p class="muted" style="margin:4px 8px 6px;font-size:.85rem">Verläufe über dem Grundriss x aufgetragen.</p>';
+    if (N.isIncl(q.sys)) html += `<p class="solution-note">${tex('Verläufe über dem Grundriss x aufgetragen.')}</p>`;
     const sol = $('solution');
     sol.innerHTML = html;
     sol.hidden = false;
@@ -365,7 +357,7 @@
     const q = S.q;
     let mode;
     const tStr = S.timed ? `${Math.round(S.tMax)} Sekunden` : 'kein Zeitlimit';
-    if (S.mode === 'arcade') mode = `Arcade, ${tStr}. Punkte gibt es für Level und Tempo, eine Serie richtiger Antworten verdoppelt sie bis zu.`;
+    if (S.mode === 'arcade') mode = `Arcade, ${tStr}. Punkte gibt es für Level und Tempo, eine Serie richtiger Antworten verdoppelt sie.`;
     else {
       const qn = { mix: '', N: 'Normalkraft', V: 'Querkraft', M: 'Moment' }[settings.learnQty] || '';
       const tn = { mix: '', verlauf: 'Verlauf zum System', system: 'System zum Verlauf', max: 'Maximum antippen', null: 'Nullstelle antippen', werte: 'Werte' }[settings.learnTask] || '';
@@ -391,10 +383,10 @@
       if (S.chosen >= 0 && !isClick()) why = q.opts[S.chosen].expl;
       else if (isClick() && tag !== 'zeit') why = N.tagExpl(tag, '');
       if (why) h += `<p class="why">${tex(why)}</p>`;
-      if (S.mode === 'arcade') h += `<p class="points">${S.lives > 0 ? `Noch ${S.lives} ${S.lives === 1 ? 'Leben' : 'Leben'}.` : 'Keine Leben mehr.'}</p>`;
+      if (S.mode === 'arcade') h += `<p class="points">${S.lives > 0 ? `Noch ${S.lives} Leben.` : 'Keine Leben mehr.'}</p>`;
     }
     let sol = '';
-    if (isClick() && !isNaN(S.clickS)) sol += `<p>Dein Tipp: x = ${N.fmt(S.clickS * ca(), 2)} m (Toleranz ± ${N.fmt(q.tol * ca(), 2)} m).</p>`;
+    if (isClick() && !isNaN(S.clickS)) sol += `<p>${tex(`Dein Tipp: x = ${N.fmt(S.clickS * ca(), 2)} m (Toleranz ± ${N.fmt(q.tol * ca(), 2)} m).`)}</p>`;
     sol += q.solLines.map((l) => `<p>${tex(l)}</p>`).join('');
     h += `<div class="sol">${sol}</div>`;
     h += sectionsHTML(q.explain);
@@ -437,18 +429,15 @@
   function showEnd() {
     S.state = 'end';
     const ml = Object.keys(S.mistakes).sort((a, b) => S.mistakes[b] - S.mistakes[a]).slice(0, 5);
-    let body = '';
-    {
-      const isNew = S.score > stats.best;
-      if (isNew) stats.best = S.score;
-      $('endKicker').textContent = 'Game over';
-      $('endTitle').innerHTML = `<span class="mark">${S.score.toLocaleString('de-DE')}</span> Punkte`;
-      body += `<p>Level ${S.level}, beste Serie ${S.bestStreak}, ${S.nCorrect} von ${S.nAsked} richtig.</p>`;
-      body += `<p>Rang: <strong>${esc(N.rankName(S.score))}</strong></p>`;
-      if (isNew) body += '<p><strong>Neuer Highscore.</strong></p>';
-    }
-    if (ml.length) body += `<p style="margin-top:16px"><strong>Daran hat es gehakt:</strong></p><ul>${ml.map((t) => `<li>${esc(N.tagLabel(t))}: ${S.mistakes[t]}×</li>`).join('')}</ul>`;
-    else body += '<p style="margin-top:16px">Keine Fehler. Stark.</p>';
+    const isNew = S.score > stats.best;
+    if (isNew) stats.best = S.score;
+    $('endKicker').textContent = 'Game over';
+    $('endTitle').innerHTML = `<span class="mark">${S.score.toLocaleString('de-DE')}</span> Punkte`;
+    let body = `<p>Level ${S.level}, beste Serie ${S.bestStreak}, ${S.nCorrect} von ${S.nAsked} richtig.</p>` +
+      `<p>Rang: <strong>${esc(N.rankName(S.score))}</strong></p>`;
+    if (isNew) body += '<p><strong>Neuer Highscore.</strong></p>';
+    if (ml.length) body += `<p class="end-sub"><strong>Daran hat es gehakt:</strong></p><ul>${ml.map((t) => `<li>${esc(N.tagLabel(t))}: ${S.mistakes[t]}×</li>`).join('')}</ul>`;
+    else body += '<p class="end-sub">Keine Fehler. Stark.</p>';
     $('endBody').innerHTML = body;
     save('nvm.stats', stats);
     showScreen('end');
@@ -515,7 +504,8 @@
     if (k === 's' && !visible('menu')) { $('soundBtn').click(); return; }
     if (!visible('app') && !visible('end')) return;
     if (k === ' ' || k === 'enter') {
-      if (document.activeElement && document.activeElement.tagName === 'BUTTON' && document.activeElement.closest('.answers')) { /* Fokus auf Antwort */ }
+      // Enter auf einer fokussierten Antwort wählt sie aus; sonst geht es weiter
+      if (k === 'enter' && document.activeElement && document.activeElement.closest('.answers') && S.state === 'question') return;
       e.preventDefault();
       nextStep();
       return;
@@ -538,7 +528,7 @@
   }
   requestAnimationFrame(frame);
 
-  narrowMQ.addEventListener && narrowMQ.addEventListener('change', () => {
+  narrowMQ.addEventListener('change', () => {
     if (!visible('app') || !S.q) return;
     if (S.solShown) showSolution(); else renderQuestion();
   });
@@ -552,6 +542,6 @@
 
   // ---------------------------------------------------------- Offline-Modus
   if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
-    window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => { /* ohne Offline weiter */ }); });
+    window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => { /* ohne Offline weiter */ }); });
   }
 })();

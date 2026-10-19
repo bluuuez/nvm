@@ -15,7 +15,7 @@
   const FUNCS = { max: '\\max', min: '\\min', sin: '\\sin', cos: '\\cos', tan: '\\tan' };
   const GREEK = { 'α': '\\alpha', 'β': '\\beta', 'γ': '\\gamma', 'δ': '\\delta', 'Δ': '\\Delta', 'Σ': '\\Sigma', '∑': '\\Sigma', 'φ': '\\varphi', 'π': '\\pi' };
   const SUBDIG = '₀₁₂₃₄₅₆₇₈₉';
-  const OPS = new Set(['=', '+', '−', '-', '≈', '·', '<', '>', '≤', '≥', '/', '→']);
+  const OPS = new Set(['=', '≠', '+', '−', '-', '≈', '·', '<', '>', '≤', '≥', '/', '→']);
 
   const reNum = /^[−+-]?\d+(?:[.,]\d+)?(?:°|%)?$/;
   const reVar = /^(?:[A-Za-z]|[A-Za-z][₀-₉]|[αβγδφ])$/;
@@ -28,7 +28,7 @@
     if (UNITS.has(w)) return 'unit';
     if (/^[a-z]+[A-Z][A-Za-z]?$/.test(w) && w.length <= 3) return 'var';     // qL …
     if (/^[−-][A-Za-z]{1,3}$/.test(w) || /^[A-Z]{2}$/.test(w)) return 'var';  // −FL, FL, EI
-    if (/^[NVM]\(x\)$/.test(w)) return 'formula';                             // N(x), V(x), M(x)
+    if (/^[−-]?[A-Za-z]\(x\)$/.test(w)) return 'formula';                       // N(x), −q(x) …
     if (OPS.has(w)) return 'op';
     if (FUNCS[w]) return 'func';
     if (reVar.test(w)) return 'var';
@@ -45,8 +45,12 @@
   const balance = (s, o, c) => s.split(o).length - s.split(c).length;
 
   // Zerlegt einen Text in Stücke {math:boolean, s:string}
+  // Abkürzungen wie „z. B.“ zusammenhalten, damit das B nicht als Variable gilt
+  const ABBR = /\b(z|d|u|s|v|o)\. ?(B|h|a|o|g|ä)\./g;
+  const JOIN = '\u2060';
+
   function segments(text) {
-    const parts = String(text).split(/(\s+)/);
+    const parts = String(text).replace(ABBR, `$1.${JOIN}$2.`).split(/(\s+)/);
     const ents = [];
     for (let i = 0; i < parts.length; i++) {
       const raw = parts[i];
@@ -57,7 +61,6 @@
       while (core.length && /[,;:.!?)“"']$/.test(core)) {
         const ch = core[core.length - 1];
         if (ch === ')' && balance(core, '(', ')') >= 0) break;
-        if (ch === '.' && /\d\.$/.test(core) && false) break;
         post = ch + post; core = core.slice(0, -1);
       }
       ents.push({ pre, core, post, k: classify(core) });
@@ -65,7 +68,10 @@
     // Läufe bilden
     const out = [];
     let i = 0;
-    const pushText = (s) => { if (!s) return; if (out.length && !out[out.length - 1].math) out[out.length - 1].s += s; else out.push({ math: false, s }); };
+    const pushText = (s) => {
+      if (!s) return;
+      s = s.split(JOIN).join('\u00a0');
+      if (out.length && !out[out.length - 1].math) out[out.length - 1].s += s; else out.push({ math: false, s }); };
     while (i < ents.length) {
       const e = ents[i];
       if (e.ws !== undefined) { pushText(e.ws); i++; continue; }
@@ -88,10 +94,11 @@
       // Operatoren am Ende abschneiden
       while (run.length > 1 && run[run.length - 1].k === 'op' && !run[run.length - 1].post) { run.pop(); j -= 2; }
       const hasF = run.some((r) => r.k === 'formula');
-      const hasEq = run.some((r) => r.k === 'op' && /^[=≈<>≤≥]$/.test(r.core));
+      const hasEq = run.some((r) => r.k === 'op' && /^[=≠≈<>≤≥]$/.test(r.core));
       const numUnit = run.length === 2 && run[0].k === 'num' && run[1].k === 'unit';
       const funcVar = run.length >= 2 && run[0].k === 'func';
-      if (hasF || (hasEq && run.length >= (eqStart ? 2 : 3)) || numUnit || funcVar) {
+      const single = run.length === 1 && run[0].k === 'var';            // einzelne Größe im Text: F, M, q₀ …
+      if (hasF || (hasEq && run.length >= (eqStart ? 2 : 3)) || numUnit || funcVar || single) {
         const first = run[0], last = run[run.length - 1];
         pushText(first.pre);
         out.push({ math: true, s: run.map((r) => r.core).join(' ') });
@@ -125,6 +132,9 @@
       if ((m = rest.match(/^(kN\/m²|kN\/m|kNm²|kNm|kN|cm|mm|m)(?![A-Za-z])/)) && L.length && lastAtom().t === 'num') {
         L.push({ t: 'unit', v: '\\,\\mathrm{' + m[1].replace('²', '^2') + '}' }); i += m[0].length; continue;
       }
+      if ((m = rest.match(/^d(²?)([VMNqx])(²?)(?![A-Za-z])/))) {          // Ableitungen: dV, dx, d²M, dx²
+        L.push({ t: 'atom', v: `\\mathrm{d}${m[1] ? '^2' : ''}${m[2]}${m[3] ? '^2' : ''}` }); i += m[0].length; continue;
+      }
       if ((m = rest.match(/^(max|min|sin|cos|tan)/))) { L.push({ t: 'func', v: FUNCS[m[1]] + ' ' }); i += m[0].length; continue; }
       if ((m = rest.match(/^\d+(?:,\d+)?/))) { L.push({ t: 'num', v: m[0].replace(',', '{,}') }); i += m[0].length; continue; }
       if ((m = rest.match(/^_\{([^}]*)\}/)) || (m = rest.match(/^_([A-Za-z⊥]+|\d+)/))) {
@@ -142,7 +152,7 @@
       if (c === '√') { L.push({ t: 'sqrt' }); i++; continue; }
       if (c === '(' || c === ')') { L.push({ t: c }); i++; continue; }
       if (c === '/') { L.push({ t: '/' }); i++; continue; }
-      const opMap = { '·': '\\cdot ', '−': '-', '-': '-', '+': '+', '=': '=', '≈': '\\approx ', '<': '<', '>': '>', '≤': '\\le ', '≥': '\\ge ', ':': '{:}\\;', '→': '\\to ', ',': ',\\;', '|': '|', '⊥': '\\perp ' };
+      const opMap = { '·': '\\cdot ', '−': '-', '-': '-', '+': '+', '=': '=', '≈': '\\approx ', '≠': '\\neq ', '<': '<', '>': '>', '≤': '\\le ', '≥': '\\ge ', ':': '{:}\\;', '→': '\\to ', ',': ',\\;', '|': '|', '⊥': '\\perp ' };
       if (opMap[c] !== undefined) { L.push({ t: 'op', c, v: opMap[c] }); i++; continue; }
       L.push({ t: 'atom', v: '\\text{' + c + '}' }); i++;
     }
@@ -162,7 +172,7 @@
     return stack[0];
   }
 
-  const BOUND = new Set(['um', '+', '-', '−', '=', '≈', '<', '>', '≤', '≥', ':', ',', '→']);
+  const BOUND = new Set(['um', '+', '-', '−', '=', '≠', '≈', '<', '>', '≤', '≥', ':', ',', '→']);
   function render(items) {
     // Wurzeln binden
     const a = [];

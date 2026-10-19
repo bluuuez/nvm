@@ -1,12 +1,32 @@
 /* NVM – Offline-Modus
  * Beim ersten Besuch werden alle Dateien gespeichert. Danach startet NVM ohne Netz.
  * Online wird im Hintergrund nachgeladen, so kommt eine neue Version beim nächsten Start an.
- * VERSION erhöhen, wenn sich die Dateiliste ändert. */
-const VERSION = 'nvm-v3';
+ * VERSION erhöhen, wenn sich Dateien ändern, damit alte Speicherstände gelöscht werden. */
+const VERSION = 'nvm-v4';
 const FILES = [
-  './', 'index.html', 'styles.css', 'fonts.css', 'manifest.webmanifest', 'icon.svg',
-  'js/core.js', 'js/math.js', 'js/draw.js', 'js/app.js',
-  'katex/katex.min.js', 'katex/katex.min.css',
+  './',
+  'fonts.css',
+  'icon.svg',
+  'index.html',
+  'manifest.webmanifest',
+  'styles.css',
+  'js/app.js',
+  'js/core.js',
+  'js/draw.js',
+  'js/math.js',
+  'katex/katex.min.css',
+  'katex/katex.min.js',
+  'icons/apple-touch-icon.png',
+  'icons/icon-192.png',
+  'icons/icon-512.png',
+  'icons/icon-maskable-512.png',
+  'fonts/barlow-semi-condensed-latin-800-normal.woff2',
+  'fonts/source-sans-3-latin-400-italic.woff2',
+  'fonts/source-sans-3-latin-400-normal.woff2',
+  'fonts/source-sans-3-latin-600-normal.woff2',
+  'fonts/source-sans-3-latin-700-normal.woff2',
+  'fonts/source-serif-4-latin-600-normal.woff2',
+  'fonts/source-serif-4-latin-700-normal.woff2',
   'katex/fonts/KaTeX_AMS-Regular.woff2',
   'katex/fonts/KaTeX_Main-Bold.woff2',
   'katex/fonts/KaTeX_Main-BoldItalic.woff2',
@@ -17,16 +37,12 @@ const FILES = [
   'katex/fonts/KaTeX_Size1-Regular.woff2',
   'katex/fonts/KaTeX_Size2-Regular.woff2',
   'katex/fonts/KaTeX_Size3-Regular.woff2',
-  'katex/fonts/KaTeX_Size4-Regular.woff2',
-  'icons/apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png',
-  'fonts/barlow-latin-400-normal.woff2', 'fonts/barlow-latin-500-normal.woff2', 'fonts/barlow-latin-600-normal.woff2',
-  'fonts/barlow-latin-700-normal.woff2', 'fonts/barlow-latin-500-italic.woff2',
-  'fonts/barlow-semi-condensed-latin-500-normal.woff2', 'fonts/barlow-semi-condensed-latin-600-normal.woff2',
-  'fonts/barlow-semi-condensed-latin-700-normal.woff2', 'fonts/barlow-semi-condensed-latin-800-normal.woff2'
+  'katex/fonts/KaTeX_Size4-Regular.woff2'
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
+  // cache: 'reload' umgeht den HTTP-Cache, damit wirklich die neue Version gespeichert wird
+  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FILES.map((f) => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {

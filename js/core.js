@@ -59,7 +59,6 @@
   }
   const fmtL = (v) => (Math.abs(v * 10 - Math.round(v * 10)) < 1e-6 ? fmt(v, 1) : fmt(v, 2));
   const fmtN = (v) => (Math.abs(v - Math.round(v)) < 1e-6 ? fmt(v, 0) : fmt(v, 1));
-  const fmtGrade = (g) => g.toFixed(1).replace('.', ',');
 
   // ------------------------------------------------------------- Bausteine
   function mkLoad(type, sub, x, x2, v, v2, Fx, mag, ang, basis = 'len') {
@@ -237,12 +236,6 @@
       }
     }
     return sys;
-  }
-
-  function demoSystem() {
-    const s = baseSys(6, 'eft');
-    s.loads = [mkLoad('q', 'qvoll', 0, 6, 10, 10, 0, 10, 0), mkLoad('F', 'F', 2, 0, 20, 0, 0, 20, 90)];
-    return s;
   }
 
   // ------------------------------------------------------------- Löser
@@ -1469,20 +1462,6 @@
     th.forEach((t, i) => { if (s >= t) r = nm[i]; });
     return r;
   }
-  function gradeOf(p) {
-    const th = [0.95, 0.90, 0.85, 0.80, 0.75, 0.70, 0.65, 0.60, 0.55, 0.50];
-    const gs = [1.0, 1.3, 1.7, 2.0, 2.3, 2.7, 3.0, 3.3, 3.7, 4.0];
-    for (let i = 0; i < th.length; i++) if (p >= th[i] - 1e-9) return gs[i];
-    return 5.0;
-  }
-  function gradeComment(g) {
-    if (g <= 1.0) return 'Perfekt. Die nächste Übung kannst du selbst halten.';
-    if (g <= 1.7) return 'Sehr gut – Schnittgrößen sitzen.';
-    if (g <= 2.7) return 'Gut gemacht, ein paar Patzer waren dabei.';
-    if (g <= 4.0) return 'Bestanden. Ein Blick in den Spickzettel schadet trotzdem nicht.';
-    return 'Durchgefallen – ab in den Lernmodus, die Wiederholungsklausur wartet.';
-  }
-
   const RULES = [
     { title: 'Vorzeichen', lines: ['N > 0 ist Zug, N < 0 Druck.', 'V > 0 zeigt am positiven Schnittufer nach unten.', 'M > 0 heißt Zug an der Unterseite (gestrichelte Faser).', 'M wird auf der Zugseite angetragen, also positiv nach unten. N und V positiv nach oben.'] },
     { title: 'Differentialbeziehungen', lines: ['dV/dx = −q(x), dM/dx = V(x), d²M/dx² = −q(x)', 'q = 0: V konstant, M linear', 'q konstant: V linear, M Parabel 2. Grades', 'q linear (Dreieck): V Parabel, M kubisch', 'M ist extremal, wo V = 0 ist bzw. das Vorzeichen wechselt.'] },
@@ -1518,12 +1497,12 @@
 
   const NVM = {
     randi, pick, shuffle, linspace, interp1, maxAbs, sum, clone,
-    fmt, fmtL, fmtN, fmtGrade,
-    mkLoad, mkSup, baseSys, setIncline, isIncl, genSystem, demoSystem,
+    fmt, fmtL, fmtN,
+    mkLoad, mkSup, baseSys, setIncline, isIncl, genSystem,
     loadArrays, solveSys, sgAt, sgArr, eqVec, curves, critPts, distRes, pickQ,
     systemMods, classicCase, classicItem, buildQuestion, pickType, typePool, isClickType, isValType,
     clusterRanges, supNames, explainSystem, momentAtSupport,
-    tagExpl, tagLabel, praise, randomTip, rankName, gradeOf, gradeComment, RULES, cheatCases
+    tagExpl, tagLabel, praise, randomTip, rankName, RULES, cheatCases
   };
   root.NVM = Object.assign(root.NVM || {}, NVM);
   if (typeof module !== 'undefined' && module.exports) module.exports = root.NVM;

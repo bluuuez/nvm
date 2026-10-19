@@ -10,8 +10,9 @@ Am iPhone in Safari öffnen → Teilen → „Zum Home-Bildschirm“. Nach dem e
 auch offline; neue Versionen kommen beim nächsten Start mit Netz automatisch an.
 
 Lokal: `index.html` doppelklicken – läuft direkt im Browser, ohne Installation und ohne Internet.
-NVM lädt nichts von fremden Servern, setzt keine Cookies und speichert Highscore und
-Einstellungen nur im eigenen Browser.
+NVM setzt keine Cookies und speichert Highscore und Einstellungen nur im eigenen Browser.
+Einzige Ausnahme ist die freiwillige Online-Bestenliste: Wer nach einem Arcade-Spiel einen Namen
+einträgt, schickt Name, Punkte, Level und Zeitpunkt an die Datenbank (Supabase).
 
 ## Modi
 
@@ -25,6 +26,8 @@ Stufen: 1 Einstieg (eine Einzel- oder Gleichstreckenlast), 2 Grundlagen (auch Te
 Einzel- und Linienmomentlasten), 3 Fortgeschritten (ein bis zwei Lasten, auch schräge und
 waagerechte Kräfte), 4 Klausurniveau (zwei Lasten), 5 Profi (zwei bis drei Lasten).
 - **Spickzettel:** Vorzeichen, Beziehungen, Standardfälle
+- **Bestenliste:** nach dem Arcade einen Namen eintragen (Filter gegen Beleidigungen in App und
+  Datenbank) und sehen, auf welchem Platz man steht
 
 Einstellungen: Zeit pro Aufgabe, Werte-Aufgaben als Formeln, mit glatten Zahlen oder mit
 Taschenrechner, schiefe Stäbe gemischt/aus/nur schief, Verläufe positiv zur gestrichelten Faser
@@ -42,12 +45,21 @@ Der Löser ist gegen die Tabellen in Schneider, Bautabellen (Abschnitt 4 A) gepr
 `1`–`4` antworten · `Leertaste` weiter · `L` Lösung · `H` Spickzettel · `T` Hell/Dunkel ·
 `S` Ton · `B` Boss-Taste · `Esc` Menü
 
+## Bestenliste einrichten
+
+1. Projekt auf supabase.com anlegen (Region Frankfurt).
+2. Im SQL Editor den Inhalt von `supabase.sql` ausführen.
+3. Project URL und anon-Schlüssel (Project Settings → API) in `js/config.js` eintragen.
+
+Ohne Eintrag in `js/config.js` ist die Bestenliste ausgeblendet.
+
 ## Dateien
 
 - `js/core.js` – Löser, Aufgaben, Fehlerkatalog, Erklärungen
 - `js/draw.js` – Systeme und Verläufe als SVG
 - `js/app.js` – Oberfläche und Spielablauf
 - `sw.js` – Offline-Modus
+- `js/board.js`, `js/config.js`, `supabase.sql` – Online-Bestenliste
 - `js/math.js` – Formelsatz: erkennt Formeln in den Texten und setzt sie mit KaTeX
 - `katex/` – KaTeX 0.16 (MIT-Lizenz), lokal für den Offline-Betrieb
 - `fonts/` – Source Sans 3, Source Serif 4, Barlow Semi Condensed (SIL Open Font License, `fonts/OFL-*.txt`)

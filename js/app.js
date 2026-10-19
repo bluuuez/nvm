@@ -51,7 +51,7 @@
   const isNarrow = () => narrowMQ.matches;
 
   // ---------------------------------------------------------- Bildschirme
-  const screens = ['app', 'menu', 'end', 'cheat'];
+  const screens = ['app', 'menu', 'end', 'cheat', 'board'];
   function showScreen(name) {
     for (const s of screens) $(s).hidden = s !== name;
     window.scrollTo(0, 0);
@@ -168,6 +168,7 @@
     b.addEventListener('click', () => {
       const m = b.dataset.mode;
       if (m === 'cheat') openCheat();
+      else if (m === 'board') openBoard();
       else startMode(m);
     });
   });
@@ -486,8 +487,80 @@
     else body += '<p class="end-sub">Keine Fehler. Stark.</p>';
     $('endBody').innerHTML = body;
     save('nvm.stats', stats);
+    // Online-Bestenliste
+    const canBoard = N.board.enabled() && S.score > 0;
+    $('boardForm').hidden = !canBoard;
+    $('boardBox').hidden = true;
+    $('boardMsg').textContent = '';
+    $('boardSubmit').disabled = false;
+    if (canBoard) $('boardName').value = loadStr('nvm.name');
     showScreen('end');
+    if (canBoard) setTimeout(() => { try { $('boardName').focus({ preventScroll: true }); } catch (e) { /* egal */ } }, 50);
   }
+
+  // ---------------------------------------------------------- Bestenliste
+  function loadStr(key) { try { return localStorage.getItem(key) || ''; } catch (e) { return ''; } }
+  const myIds = () => { try { return JSON.parse(localStorage.getItem('nvm.myScores') || '[]'); } catch (e) { return []; } };
+  function rowsHTML(rows, startPos, mark) {
+    return rows.map((r, k) => {
+      const me = mark.includes(r.id);
+      return `<li class="${me ? 'me' : ''}"><span class="pos">${startPos + k}.</span><span class="nm">${esc(r.name)}</span>` +
+        `<span class="lv">Level ${r.level}</span><span class="pts">${Number(r.score).toLocaleString('de-DE')}</span></li>`;
+    }).join('');
+  }
+  // own: { rank } nach dem Eintragen; ohne own (Bestenliste aus dem Menü) wird der beste eigene Eintrag gesucht
+  async function renderBoard(box, own, n = 10) {
+    box.hidden = false;
+    box.innerHTML = '<p class="muted">Bestenliste wird geladen …</p>';
+    try {
+      const mark = myIds();
+      const [list, total] = await Promise.all([N.board.top(n), N.board.total()]);
+      let label = 'Platz';
+      if (!own && mark.length) {
+        const best = await N.board.bestOf(mark);
+        if (best) { own = { rank: await N.board.rankOf(best) }; label = 'Dein bester Platz:'; }
+      }
+      let h = '';
+      if (own) h += `<p class="board-rank">${label} <strong>${own.rank.toLocaleString('de-DE')}</strong> von ${total.toLocaleString('de-DE')}</p>`;
+      h += `<ol class="board-list">${rowsHTML(list, 1, mark)}</ol>`;
+      if (own && own.rank > n) {
+        const near = await N.board.around(own.rank, 5);
+        h += `<p class="board-gap" aria-hidden="true">⋯</p><ol class="board-list">${rowsHTML(near.rows, near.offset + 1, mark)}</ol>`;
+      }
+      if (!list.length) h = '<p class="muted">Noch keine Einträge. Spiel eine Runde Arcade und sei die oder der Erste.</p>';
+      box.innerHTML = h;
+    } catch (e) {
+      box.innerHTML = '<p class="board-err">Die Bestenliste ist gerade nicht erreichbar. Prüf die Internetverbindung und versuch es später noch einmal.</p>';
+    }
+  }
+  $('boardForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = $('boardName').value.trim().replace(/\s+/g, ' ');
+    const msg = N.board.checkName(name);
+    if (msg) { $('boardMsg').textContent = msg; $('boardMsg').className = 'board-msg bad'; return; }
+    $('boardSubmit').disabled = true;
+    $('boardMsg').className = 'board-msg'; $('boardMsg').textContent = 'Wird eingetragen …';
+    try {
+      const row = await N.board.submit({ name, score: S.score, level: S.level, correct: S.nCorrect, asked: S.nAsked });
+      try {
+        localStorage.setItem('nvm.name', name);
+        localStorage.setItem('nvm.myScores', JSON.stringify(myIds().concat([row.id]).slice(-200)));
+      } catch (er) { /* privat */ }
+      const rank = await N.board.rankOf(row);
+      $('boardForm').hidden = true;
+      await renderBoard($('boardBox'), { rank });
+    } catch (er) {
+      $('boardSubmit').disabled = false;
+      $('boardMsg').className = 'board-msg bad';
+      $('boardMsg').textContent = /HTTP 4/.test(er.message) ? 'Dieser Eintrag wurde abgelehnt. Bitte einen anderen Namen wählen.'
+        : /Bitte|Erlaubt|Höchstens/.test(er.message) ? er.message : 'Gerade keine Verbindung zur Bestenliste. Versuch es gleich noch einmal.';
+    }
+  });
+  function openBoard() {
+    showScreen('board');
+    renderBoard($('boardScreenBox'), null, 20);
+  }
+  $('boardClose').addEventListener('click', goMenu);
   $('againBtn').addEventListener('click', () => startMode(S.mode));
   $('homeBtn').addEventListener('click', goMenu);
 
@@ -544,11 +617,13 @@
 
   document.addEventListener('keydown', (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;   // Tippen im Namensfeld
     const k = e.key.toLowerCase();
     if (S.boss) { if (k === 'b' || k === 'escape') { toggleBoss(); e.preventDefault(); } return; }
     if (k === 'b') { toggleBoss(); return; }
     if (k === 't') { toggleTheme(); return; }
     if (k === 'escape') { if (visible('cheat')) closeCheat(); else if (!visible('menu')) goMenu(); return; }
+    if (visible('board')) return;
     if (k === 'h') { if (visible('cheat')) closeCheat(); else openCheat(); return; }
     if (k === 's' && !visible('menu')) { $('soundBtn').click(); return; }
     if (!visible('app') && !visible('end')) return;
@@ -585,6 +660,7 @@
   // Testzugang (Browser-Konsole / automatische Tests)
   window.NVMapp = { S, startMode, nextQuestion, answer, handleTap, toggleSolution, nextStep, openCheat, closeCheat, toggleBoss, goMenu, settings };
 
+  $('boardModeBtn').hidden = !N.board.enabled();
   applyTheme();
   applyPlot();
   syncSegs();

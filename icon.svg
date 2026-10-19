@@ -5,11 +5,11 @@
     <pattern id="hm" width="7" height="7" patternUnits="userSpaceOnUse"><line x1="3.5" y1="0" x2="3.5" y2="7" stroke="#ff7a7a" stroke-width="1.6" opacity=".6"/></pattern>
   </defs>
   <rect width="512" height="512" rx="112" fill="#131417"/>
-  <g transform="translate(23.5 150) scale(.75)">
+  <g transform="translate(23.5 154.75) scale(.75)">
     <g font-family="Barlow Semi Condensed, Arial Narrow, Arial, sans-serif" font-weight="800" font-size="170" text-anchor="middle">
-      <text x="108" y="168" fill="#4fd08f">N</text>
-      <text x="312" y="168" fill="#79a8ff">V</text>
-      <text x="507" y="168" fill="#ff7a7a">M</text>
+      <text x="108" y="146" fill="#4fd08f">N</text>
+      <text x="312" y="146" fill="#79a8ff">V</text>
+      <text x="507" y="146" fill="#ff7a7a">M</text>
     </g>
     <line x1="18" y1="196" x2="602" y2="196" stroke="#e9ebee" stroke-width="8" stroke-linecap="round"/>
     <path d="M30 196 V176 H186 V196" fill="url(#hn)" stroke="#4fd08f" stroke-width="5" stroke-linejoin="round"/>

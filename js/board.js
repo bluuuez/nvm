@@ -36,7 +36,7 @@
   // ------------------------------------------------------------ Datenbank
   const cfg = () => root.NVM_CONFIG || {};
   const enabled = () => !!(cfg().supabaseUrl && cfg().supabaseKey);
-  const base = () => cfg().supabaseUrl.replace(/\/+$/, '') + '/rest/v1/scores';
+  const base = () => cfg().supabaseUrl.replace(/\/+$/, '').replace(/\/rest\/v1$/, '') + '/rest/v1/scores';
   function headers(extra) {
     const k = cfg().supabaseKey;
     const h = { apikey: k, 'Content-Type': 'application/json' };

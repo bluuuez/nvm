@@ -2,7 +2,7 @@
  * Beim ersten Besuch werden alle Dateien gespeichert. Danach startet NVM ohne Netz.
  * Online wird im Hintergrund nachgeladen, so kommt eine neue Version beim nächsten Start an.
  * VERSION erhöhen, wenn sich Dateien ändern, damit alte Speicherstände gelöscht werden. */
-const VERSION = 'nvm-v9';
+const VERSION = 'nvm-v10';
 const FILES = [
   './',
   'fonts.css',

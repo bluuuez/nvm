@@ -85,9 +85,9 @@
   //   Festlager – Grundlinie mit Schraffur, Loslager – Doppellinie (Gleitebene), Einspannung – Wand mit Schraffur.
   // Lokale Koordinaten mit y nach unten, gedreht um rot (Grad, Uhrzeigersinn).
   const SUP = (compact) => (compact ? { w: 8, h: 12, r: 3, gap: 4 } : { w: 12, h: 18, r: 4, gap: 5.5 });
-  // Das Gelenk sitzt unter dem Stab, unterhalb der gestrichelten Faser; ein kurzer Steg verbindet es mit dem Stab.
+  // Das Gelenk sitzt direkt unter dem Stab (berührt die Unterkante), das Dreieck hängt darunter.
   const FIB = (compact) => (compact ? 4 : 5.5);                       // Abstand der Faser von der Stabachse
-  const pinY = (compact, fib = 1) => FIB(compact) * fib + 1.5 + SUP(compact).r;
+  const pinY = (compact, fib = 1) => 2.1 * fib + SUP(compact).r;      // 2,1 = halbe Stabdicke
   function supDepth(type, compact) {
     const { h, gap } = SUP(compact);
     return type === 'einsp' ? h * 1.45 : pinY(compact) + (type === 'fest' ? h + 6 : h + gap);
@@ -98,7 +98,6 @@
     let g = `<g transform="translate(${r1(X)},${r1(Y)}) rotate(${r1(rot)})">`;
     if (type !== 'einsp') {
       const y0 = pinY(compact, fib);
-      g += `<line x1="0" y1="0" x2="0" y2="${r1(y0 - r)}" class="sv-stem"/>`;
       g += `<g transform="translate(0,${r1(y0)})">`;
     }
     if (type === 'einsp') {

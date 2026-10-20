@@ -85,13 +85,22 @@
   //   Festlager – Grundlinie mit Schraffur, Loslager – Doppellinie (Gleitebene), Einspannung – Wand mit Schraffur.
   // Lokale Koordinaten mit y nach unten, gedreht um rot (Grad, Uhrzeigersinn).
   const SUP = (compact) => (compact ? { w: 8, h: 12, r: 3, gap: 4 } : { w: 12, h: 18, r: 4, gap: 5.5 });
+  // Das Gelenk sitzt unter dem Stab, unterhalb der gestrichelten Faser; ein kurzer Steg verbindet es mit dem Stab.
+  const FIB = (compact) => (compact ? 4 : 5.5);                       // Abstand der Faser von der Stabachse
+  const pinY = (compact, fib = 1) => FIB(compact) * fib + 1.5 + SUP(compact).r;
   function supDepth(type, compact) {
     const { h, gap } = SUP(compact);
-    return type === 'einsp' ? h * 1.45 : type === 'fest' ? h + 6 : h + gap;
+    return type === 'einsp' ? h * 1.45 : pinY(compact) + (type === 'fest' ? h + 6 : h + gap);
   }
-  function support(X, Y, type, rot, outw, compact) {
+  //   fib: Faktor für den Faserabstand in Lagerrichtung (schräger Stab mit senkrechtem Lager: 1/cos α)
+  function support(X, Y, type, rot, outw, compact, fib = 1) {
     const { w, h, r, gap } = SUP(compact);
     let g = `<g transform="translate(${r1(X)},${r1(Y)}) rotate(${r1(rot)})">`;
+    if (type !== 'einsp') {
+      const y0 = pinY(compact, fib);
+      g += `<line x1="0" y1="0" x2="0" y2="${r1(y0 - r)}" class="sv-stem"/>`;
+      g += `<g transform="translate(0,${r1(y0)})">`;
+    }
     if (type === 'einsp') {
       const hh = h * 1.45, n = compact ? 6 : 8;
       g += `<line x1="0" y1="${r1(-hh)}" x2="0" y2="${r1(hh)}" class="sv-sup-wall"/>`;
@@ -111,7 +120,7 @@
       } else {
         g += `<line x1="${r1(-gl)}" y1="${r1(h + gap)}" x2="${r1(gl)}" y2="${r1(h + gap)}" class="sv-ground"/>`;
       }
-      g += `<circle cx="0" cy="0" r="${r}" class="sv-pin"/>`;
+      g += `<circle cx="0" cy="0" r="${r}" class="sv-pin"/></g>`;
     }
     return g + '</g>';
   }
@@ -119,7 +128,7 @@
   // Stab mit gestrichelter Faser auf der +z-Seite (bei x nach rechts: unten)
   function beamSvg(ax, ay, bx, by, compact) {
     const dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy) || 1;
-    const zx = -dy / len, zy = dx / len, off = compact ? 4 : 5.5, cut = compact ? 1 : 2;
+    const zx = -dy / len, zy = dx / len, off = FIB(compact), cut = compact ? 1 : 2;
     const ex = dx / len * cut, ey = dy / len * cut;
     return line(ax, ay, bx, by, 'sv-beam') +
       line(ax + zx * off + ex, ay + zy * off + ey, bx + zx * off - ex, by + zy * off - ey, 'sv-fiber');
@@ -155,14 +164,14 @@
           if (end < 0) g += arrow(p[0] - 50, y, p[0] - 9, y, 'sv-react-arrow', hd, 1.8);
           else g += arrow(p[0] + 9, y, p[0] + 50, y, 'sv-react-arrow', hd, 1.8);
         } else {
-          const y = p[1] + h, x0 = p[0] - side * (1.55 * w + 4);
+          const y = p[1] + pinY(compact) + h, x0 = p[0] - side * (1.55 * w + 4);
           if (side > 0) g += arrow(x0 - 40, y, x0, y, 'sv-react-arrow', hd, 1.8);
           else g += arrow(x0, y, x0 + 40, y, 'sv-react-arrow', hd, 1.8);
         }
       } else if (u.c === 'N') {
         // senkrecht zur Stabachse, entlang der gedrehten Lagerachse
         const a = rot * Math.PI / 180, nx = -Math.sin(a), ny = Math.cos(a);   // lokale y-Achse des Lagers
-        const d = h + gap + 2, tip = [p[0] + nx * d, p[1] + ny * d];
+        const d = pinY(compact) + h + gap + 2, tip = [p[0] + nx * d, p[1] + ny * d];
         g += arrow(tip[0] + nx * len, tip[1] + ny * len, tip[0], tip[1], 'sv-react-arrow', hd, 1.8);
       } else {
         // Einspannmoment: Halbkreis auf der Außenseite der Wand
@@ -436,7 +445,8 @@
     sys.sup.forEach((sp) => {
       const p = P(sp.x);
       const rot = sp.type === 'losN' || sp.type === 'einsp' ? -aApp : 0;
-      g += support(p[0], p[1], sp.type, rot, sp.x <= L / 2 ? -1 : 1, compact);
+      const fib = rot ? 1 : 1 / Math.max(0.3, Math.cos(aApp * Math.PI / 180));
+      g += support(p[0], p[1], sp.type, rot, sp.x <= L / 2 ? -1 : 1, compact, fib);
     });
 
     if (!compact) {
@@ -450,13 +460,14 @@
           g += reactionArrows(sys, sol, i, p, sp, { compact, inward: ow < 0 ? bu : [-bu[0], -bu[1]], end: ow, side: ow, rot });
           // Werte neben den Pfeil; bei einer Einspannung am unteren Ende auf die Innenseite (unter den Stab)
           const low = p[1] >= Math.max(p0[1], p1[1]) - 1e-6;
-          let sd = ow, y0 = p[1] + 26;
-          if (sp.type === 'einsp') { if (low) sd = -ow; else y0 = p[1] + 44; }
-          reactionLines(sys, sol, i, names).forEach((t, k) => { front += text(p[0] + sd * 16, y0 + k * 15, t, 'sv-react', 13, sd < 0 ? 'end' : 'start'); });
-        } else front += text(p[0] + ow * 26, p[1] + 10, names[i], 'sv-name', 15, anc);
+          // Gelenklager am hohen Ende: Werte mittig unter den Pfeil, damit sie nicht in die Höhenbemaßung laufen
+          let sd = ow, y0 = p[1] + 48, dx = 16;
+          if (sp.type === 'einsp') { y0 = p[1] + 26; if (low) sd = -ow; else y0 = p[1] + 44; } else if (!low) { sd = 0; y0 = p[1] + supDepth(sp.type, compact) + 48; dx = 0; }
+          reactionLines(sys, sol, i, names).forEach((t, k) => { front += text(p[0] + sd * dx, y0 + k * 15, t, 'sv-react', 13, sd < 0 ? 'end' : sd > 0 ? 'start' : 'middle'); });
+        } else front += text(p[0] + ow * 26, p[1] + 10 + pinY(compact), names[i], 'sv-name', 15, anc);
       });
       // Grundriss-Bemaßung
-      const yd = Math.max(p0[1], p1[1]) + (sol ? 62 : 50);
+      const yd = Math.max(p0[1], p1[1]) + (sol ? 80 : 60);
       if (sym) {
         g += line(p0[0], yd, p1[0], yd, 'sv-dim') + dimTick(p0[0], yd) + dimTick(p1[0], yd);
         front += text((p0[0] + p1[0]) / 2, yd - 7, 'l', 'sv-dim-sym', 18);
@@ -475,7 +486,9 @@
       const dOff = sol ? (narrow ? 84 : 116) : (narrow ? 70 : 92);
       const xv = hh > 0 ? p1[0] + dOff : p0[0] - dOff;
       g += line(xv, yLow, xv, yHigh, 'sv-dim') + line(xv - 4, yLow - 4, xv + 4, yLow + 4, 'sv-dim-tick') + line(xv - 4, yHigh - 4, xv + 4, yHigh + 4, 'sv-dim-tick');
-      front += text(xv + (hh > 0 ? 8 : -8), (yLow + yHigh) / 2 + 5, sym ? 'h' : fmtL(Math.abs(hh)), sym ? 'sv-dim-sym' : 'sv-dim-text', sym ? 18 : 13, hh > 0 ? 'start' : 'end');
+      // Maßzahl außen neben die Linie; reicht der Platz bis zum Bildrand nicht, auf die Innenseite
+      const out = hh > 0 ? xv + 36 < W : xv - 36 > 0, sideR = (hh > 0) === out;
+      front += text(xv + (sideR ? 8 : -8), (yLow + yHigh) / 2 + 5, sym ? 'h' : fmtL(Math.abs(hh)), sym ? 'sv-dim-sym' : 'sv-dim-text', sym ? 18 : 13, sideR ? 'start' : 'end');
       // Neigungswinkel am unteren Ende
       const rA = 40, po = hh > 0 ? p0 : p1, dir = hh > 0 ? 1 : -1;
       const aAbs = Math.abs(aApp);

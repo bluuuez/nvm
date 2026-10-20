@@ -233,6 +233,7 @@ kbd {
 .sv-beam { stroke: var(--ink); stroke-width: 4.2; stroke-linecap: butt; }
 .sv-fiber { stroke: var(--ink); stroke-width: 1.1; stroke-dasharray: 6 4; opacity: .75; }
 .sv-sup { fill: var(--sheet); stroke: var(--ink); stroke-width: 1.5; stroke-linejoin: round; }
+.sv-stem { stroke: var(--ink); stroke-width: 1.5; }
 .sv-pin { fill: var(--sheet); stroke: var(--ink); stroke-width: 1.5; }
 .sv-sup-wall { stroke: var(--ink); stroke-width: 2.6; stroke-linecap: square; }
 .sv-ground { stroke: var(--ink); stroke-width: 1.5; stroke-linecap: square; }

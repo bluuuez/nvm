@@ -204,14 +204,15 @@
     }
     S.lastType = S.q.type;
     S.state = 'question'; S.solShown = false; S.chosen = -1; S.clickS = NaN; S.fresh = true;
-    $('timer').hidden = !S.timed;
-    $('timerFill').style.transform = 'scaleX(1)';
-    $('timer').dataset.level = 'ok';
+    timerEl.hidden = !S.timed;
+    timerFill.style.transform = 'scaleX(1)';
+    timerEl.dataset.level = 'ok';
     renderQuestion();
     renderIntro();
     updateHud();
     updateButtons();
     window.scrollTo(0, 0);
+    startTimer();
   }
 
   const isClick = () => N.isClickType(S.q.type);
@@ -257,11 +258,12 @@
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'answer';
-      b.setAttribute('aria-label', `Antwort ${k + 1}`);
+      const graphic = q.type.startsWith('diag') || q.type.startsWith('sysFrom');
+      if (graphic) b.setAttribute('aria-label', `Antwort ${k + 1}`);
       let inner = `<span class="num" aria-hidden="true">${k + 1}</span>`;
       if (q.type.startsWith('diag')) inner += D.diagram(o.xs.map((x) => x * ca()), o.f, q.qty, Lp(), { compact: true });
       else if (q.type.startsWith('sysFrom')) inner += D.system(o.sys, { mode: 'compact', symbolic: true }).svg;
-      else inner += `<span class="val">${tex(o.label)}</span>`;
+      else inner += `<span class="val">${tex(o.label)}</span>`;   // KaTeX liefert MathML für Bildschirmleser mit
       if (fb) {
         b.disabled = true;
         if (k === q.correct) { b.classList.add('is-correct'); inner += '<span class="tag">Richtig</span>'; }
@@ -508,7 +510,7 @@
     return rows.map((r, k) => {
       const me = mark.includes(r.id);
       return `<li class="${me ? 'me' : ''}"><span class="pos">${startPos + k}.</span><span class="nm">${esc(r.name)}</span>` +
-        `<span class="lv">Level ${r.level}</span><span class="pts">${Number(r.score).toLocaleString('de-DE')}</span></li>`;
+        `<span class="lv">Level ${Number(r.level)}</span><span class="pts">${Number(r.score).toLocaleString('de-DE')}</span></li>`;
     }).join('');
   }
   // own: { rank } nach dem Eintragen; ohne own (Bestenliste aus dem Menü) wird der beste eigene Eintrag gesucht
@@ -595,7 +597,7 @@
   }
   function closeCheat() {
     if (!visible('cheat')) return;
-    if (S.cheatFrom === 'app') showScreen('app'); else goMenu();
+    if (S.cheatFrom === 'app') { showScreen('app'); startTimer(); } else goMenu();
   }
   $('cheatClose').addEventListener('click', closeCheat);
   $('cheatBtn').addEventListener('click', openCheat);
@@ -606,6 +608,7 @@
     S.boss = !S.boss;
     $('boss').hidden = !S.boss;
     document.title = S.boss ? 'Statik II – Übungsblatt 6 (Lösung).pdf' : realTitle;
+    startTimer();
   }
   $('boss').addEventListener('click', toggleBoss);
 
@@ -641,24 +644,33 @@
     if (['1', '2', '3', '4'].includes(k)) answer(Number(k) - 1);
   });
 
+  // Zeitbalken: die Schleife läuft nur, solange eine Aufgabe mit Zeitlimit sichtbar ist (spart Akku)
+  const timerEl = $('timer'), timerFill = $('timerFill');
+  let ticking = false, lastT = 0;
+  const timerActive = () => S.state === 'question' && S.timed && !S.boss && !document.hidden && visible('app');
   function frame(t) {
-    const dt = Math.min((t - (frame.last || t)) / 1000, 0.2);
-    frame.last = t;
-    if (S.state === 'question' && S.timed && !S.boss && visible('app') && !document.hidden) {
-      S.tLeft -= dt;
-      const fr = Math.max(S.tLeft, 0) / S.tMax;
-      $('timerFill').style.transform = `scaleX(${fr})`;
-      $('timer').dataset.level = fr > 0.5 ? 'ok' : fr > 0.2 ? 'warn' : 'late';
-      if (S.tLeft <= 0) { S.chosen = -1; finish(false, 'zeit'); }
-    }
+    if (!timerActive()) { ticking = false; return; }
+    const dt = Math.min((t - (lastT || t)) / 1000, 0.2);
+    lastT = t;
+    S.tLeft -= dt;
+    const fr = Math.max(S.tLeft, 0) / S.tMax;
+    timerFill.style.transform = `scaleX(${fr})`;
+    timerEl.dataset.level = fr > 0.5 ? 'ok' : fr > 0.2 ? 'warn' : 'late';
+    if (S.tLeft <= 0) { S.chosen = -1; ticking = false; finish(false, 'zeit'); return; }
     requestAnimationFrame(frame);
   }
-  requestAnimationFrame(frame);
+  function startTimer() {
+    if (ticking || !timerActive()) return;
+    ticking = true; lastT = 0;
+    requestAnimationFrame(frame);
+  }
+  document.addEventListener('visibilitychange', startTimer);
 
-  narrowMQ.addEventListener('change', () => {
+  const onNarrow = () => {
     if (!visible('app') || !S.q) return;
     if (S.solShown) showSolution(); else renderQuestion();
-  });
+  };
+  if (narrowMQ.addEventListener) narrowMQ.addEventListener('change', onNarrow); else narrowMQ.addListener(onNarrow);
 
   // Testzugang (Browser-Konsole / automatische Tests)
   window.NVMapp = { S, startMode, nextQuestion, answer, handleTap, toggleSolution, nextStep, openCheat, closeCheat, toggleBoss, goMenu, settings };

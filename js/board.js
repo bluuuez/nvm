@@ -79,8 +79,10 @@
   }
   // Platz eines Ergebnisses: alle mit mehr Punkten, bei Gleichstand die früheren
   async function rankOf(row) {
-    const higher = await count(`score=gt.${row.score}`);
-    const tie = await count(`score=eq.${row.score}&created_at=lt.${encodeURIComponent(row.created_at)}`);
+    const [higher, tie] = await Promise.all([
+      count(`score=gt.${Number(row.score)}`),
+      count(`score=eq.${Number(row.score)}&created_at=lt.${encodeURIComponent(row.created_at)}`)
+    ]);
     return higher + tie + 1;
   }
 

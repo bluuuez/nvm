@@ -296,14 +296,13 @@
       else if (x.t === 'sqrt') word('m-r', '√');
       if (x.sub) {
         const t = x.sub.replace(/\\mathrm\{(.*)\}/, '$1').replace('\\perp', '⊥');
-        o += `<tspan class="m-r" dy="0.3em" font-size="0.7em">${esc(t)}</tspan>`; lift = 0.3 * 0.7 / 0.7;
-        // dy in em bezieht sich auf die verkleinerte Schrift, daher zurück mit der normalen Größe
-        lift = 0.21;
+        o += `<tspan class="m-r" dy="0.3em" font-size="0.7em">${esc(t)}</tspan>`;
+        lift = 0.21;   // dy in em bezieht sich auf die verkleinerte Schrift (0,3 · 0,7), zurück mit der normalen Größe
       }
       if (x.sup) {
         back();
         const t = x.sup === '\\circ' ? '°' : x.sup === '2' ? '²' : x.sup === '3' ? '³' : x.sup;
-        o += `<tspan class="m-r">${t}</tspan>`;
+        o += `<tspan class="m-r">${esc(t)}</tspan>`;
       }
     }
     back();

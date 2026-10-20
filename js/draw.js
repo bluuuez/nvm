@@ -85,19 +85,19 @@
   //   Festlager – Grundlinie mit Schraffur, Loslager – Doppellinie (Gleitebene), Einspannung – Wand mit Schraffur.
   // Lokale Koordinaten mit y nach unten, gedreht um rot (Grad, Uhrzeigersinn).
   const SUP = (compact) => (compact ? { w: 8, h: 12, r: 3, gap: 4 } : { w: 12, h: 18, r: 4, gap: 5.5 });
-  // Das Gelenk sitzt direkt unter dem Stab (berührt die Unterkante), das Dreieck hängt darunter.
+  // Gelenk: am Stabende auf Höhe der Stabachse (der Stab läuft ins Gelenk), im Feld direkt unter dem Stab.
   const FIB = (compact) => (compact ? 4 : 5.5);                       // Abstand der Faser von der Stabachse
-  const pinY = (compact, fib = 1) => 2.1 * fib + SUP(compact).r;      // 2,1 = halbe Stabdicke
-  function supDepth(type, compact) {
+  const pinY = (compact, fib = 1, atEnd = false) => (atEnd ? 0 : 2.1 * fib + SUP(compact).r);   // 2,1 = halbe Stabdicke
+  function supDepth(type, compact, atEnd = false) {
     const { h, gap } = SUP(compact);
-    return type === 'einsp' ? h * 1.45 : pinY(compact) + (type === 'fest' ? h + 6 : h + gap);
+    return type === 'einsp' ? h * 1.45 : pinY(compact, 1, atEnd) + (type === 'fest' ? h + 6 : h + gap);
   }
   //   fib: Faktor für den Faserabstand in Lagerrichtung (schräger Stab mit senkrechtem Lager: 1/cos α)
-  function support(X, Y, type, rot, outw, compact, fib = 1) {
+  function support(X, Y, type, rot, outw, compact, fib = 1, atEnd = false) {
     const { w, h, r, gap } = SUP(compact);
     let g = `<g transform="translate(${r1(X)},${r1(Y)}) rotate(${r1(rot)})">`;
     if (type !== 'einsp') {
-      const y0 = pinY(compact, fib);
+      const y0 = pinY(compact, fib, atEnd);
       g += `<g transform="translate(0,${r1(y0)})">`;
     }
     if (type === 'einsp') {
@@ -149,7 +149,8 @@
     const { compact, inward, end, side, rot } = opt;
     const { w, h, gap } = SUP(compact);
     let g = '';
-    const depth = supDepth(sp.type, compact) + 2, len = compact ? 22 : 30, hd = compact ? 7 : 9;
+    const atEnd = !!end;
+    const depth = supDepth(sp.type, compact, atEnd) + 2, len = compact ? 22 : 30, hd = compact ? 7 : 9;
     sol.unk.forEach((u, j) => {
       if (u.s !== i) return;
       const r = sol.R[j];
@@ -163,14 +164,14 @@
           if (end < 0) g += arrow(p[0] - 50, y, p[0] - 9, y, 'sv-react-arrow', hd, 1.8);
           else g += arrow(p[0] + 9, y, p[0] + 50, y, 'sv-react-arrow', hd, 1.8);
         } else {
-          const y = p[1] + pinY(compact) + h, x0 = p[0] - side * (1.55 * w + 4);
+          const y = p[1] + pinY(compact, 1, atEnd) + h, x0 = p[0] - side * (1.55 * w + 4);
           if (side > 0) g += arrow(x0 - 40, y, x0, y, 'sv-react-arrow', hd, 1.8);
           else g += arrow(x0, y, x0 + 40, y, 'sv-react-arrow', hd, 1.8);
         }
       } else if (u.c === 'N') {
         // senkrecht zur Stabachse, entlang der gedrehten Lagerachse
         const a = rot * Math.PI / 180, nx = -Math.sin(a), ny = Math.cos(a);   // lokale y-Achse des Lagers
-        const d = pinY(compact) + h + gap + 2, tip = [p[0] + nx * d, p[1] + ny * d];
+        const d = pinY(compact, 1, atEnd) + h + gap + 2, tip = [p[0] + nx * d, p[1] + ny * d];
         g += arrow(tip[0] + nx * len, tip[1] + ny * len, tip[0], tip[1], 'sv-react-arrow', hd, 1.8);
       } else {
         // Einspannmoment: Halbkreis auf der Außenseite der Wand
@@ -302,7 +303,7 @@
       const yl = place((xa + xb) / 2, yt - 6, s, fsS, 'middle');
       front += text((xa + xb) / 2, yl, s, 'sv-load-text', fsS);
     }
-    sys.sup.forEach((sp) => { g += support(X(sp.x), yb, sp.type, 0, sp.x <= L / 2 ? -1 : 1, compact); });
+    sys.sup.forEach((sp) => { g += support(X(sp.x), yb, sp.type, 0, sp.x <= L / 2 ? -1 : 1, compact, 1, sp.x < 1e-9 || sp.x > L - 1e-9); });
     for (const h of sys.hinges) g += `<circle cx="${r1(X(h))}" cy="${yb}" r="${compact ? 4.5 : 6}" class="sv-hinge"/>`;
 
     if (!compact) {
@@ -333,7 +334,7 @@
         const xp = X(sp.x);
         const end = sp.x < 1e-9 ? -1 : sp.x > L - 1e-9 ? 1 : 0;
         const side = sp.x > 0.75 * L ? -1 : 1;            // Seite für die Werte
-        const depth = supDepth(sp.type, compact);
+        const depth = supDepth(sp.type, compact, !!end);
         if (sol) {
           g += reactionArrows(sys, sol, i, [xp, yb], sp, { compact, inward: [end > 0 ? -1 : 1, 0], end, side, rot: 0 });
           const lines = reactionLines(sys, sol, i, names);
@@ -445,7 +446,7 @@
       const p = P(sp.x);
       const rot = sp.type === 'losN' || sp.type === 'einsp' ? -aApp : 0;
       const fib = rot ? 1 : 1 / Math.max(0.3, Math.cos(aApp * Math.PI / 180));
-      g += support(p[0], p[1], sp.type, rot, sp.x <= L / 2 ? -1 : 1, compact, fib);
+      g += support(p[0], p[1], sp.type, rot, sp.x <= L / 2 ? -1 : 1, compact, fib, sp.x < 1e-9 || sp.x > L - 1e-9);
     });
 
     if (!compact) {
@@ -461,9 +462,9 @@
           const low = p[1] >= Math.max(p0[1], p1[1]) - 1e-6;
           // Gelenklager am hohen Ende: Werte mittig unter den Pfeil, damit sie nicht in die Höhenbemaßung laufen
           let sd = ow, y0 = p[1] + 48, dx = 16;
-          if (sp.type === 'einsp') { y0 = p[1] + 26; if (low) sd = -ow; else y0 = p[1] + 44; } else if (!low) { sd = 0; y0 = p[1] + supDepth(sp.type, compact) + 48; dx = 0; }
+          if (sp.type === 'einsp') { y0 = p[1] + 26; if (low) sd = -ow; else y0 = p[1] + 44; } else if (!low) { sd = 0; y0 = p[1] + supDepth(sp.type, compact, true) + 48; dx = 0; }
           reactionLines(sys, sol, i, names).forEach((t, k) => { front += text(p[0] + sd * dx, y0 + k * 15, t, 'sv-react', 13, sd < 0 ? 'end' : sd > 0 ? 'start' : 'middle'); });
-        } else front += text(p[0] + ow * 26, p[1] + 10 + pinY(compact), names[i], 'sv-name', 15, anc);
+        } else front += text(p[0] + ow * 26, p[1] + 10, names[i], 'sv-name', 15, anc);
       });
       // Grundriss-Bemaßung
       const yd = Math.max(p0[1], p1[1]) + (sol ? 80 : 60);

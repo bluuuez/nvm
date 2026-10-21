@@ -10,6 +10,8 @@
  * Modell:
  *   nodes:   [{ x, y, hinge }]                 hinge = Vollgelenk (alle Stabenden gelenkig)
  *   members: [{ a, b, truss, relA, relB }]     truss = Pendelstab (beide Enden gelenkig, keine Stablasten)
+ *            relA/relB: Momentengelenk am Stabende; relVA/relVB: Querkraftgelenk (V = 0);
+ *            relNA/relNB: Normalkraftgelenk (N = 0)
  *   sup:     [{ n, type, ang }]                type: 'fest' | 'los' | 'einsp' | 'gleit' (verschiebliche Einspannung);
  *                                               ang = Richtung der Lagerkraft in Grad ('los': 90 = senkrecht,
  *                                               'gleit': 0 = waagerecht, also senkrecht verschieblich)
@@ -109,8 +111,10 @@
     const G = [], LA = [];
     for (let i = 0; i < nm; i++) {
       G.push(geom(fr, i)); LA.push(localLoads(fr, i));
-      const ix = { N: unk.push({ kind: 'N0', m: i }) - 1, V: -1, M: -1 };
-      if (!fr.members[i].truss) ix.V = unk.push({ kind: 'V0', m: i }) - 1;
+      const mm = fr.members[i];
+      const ix = { N: -1, V: -1, M: -1 };
+      if (!mm.relNA) ix.N = unk.push({ kind: 'N0', m: i }) - 1;
+      if (!mm.truss && !mm.relVA) ix.V = unk.push({ kind: 'V0', m: i }) - 1;
       if (!relA(fr, i)) ix.M = unk.push({ kind: 'M0', m: i }) - 1;
       mi.push(ix);
     }
@@ -179,6 +183,11 @@
     }
     // gelenkiges Stabende b: M(l) = 0
     for (let i = 0; i < nm; i++) if (relB(fr, i) && !fr.members[i].truss) rows.push(endB[i].M);
+    // Querkraft- bzw. Normalkraftgelenk am Stabende b: V(l) = 0 bzw. N(l) = 0
+    for (let i = 0; i < nm; i++) {
+      if (fr.members[i].relVB && !fr.members[i].truss) rows.push(endB[i].V);
+      if (fr.members[i].relNB) rows.push(endB[i].N);
+    }
     // Pendelstab: Querkraft null und keine Stablasten erlaubt
     const res = { ok: false, why: '', nU, nE: rows.length, unk };
     if (fr.members.some((m, i) => m.truss && fr.loads.some((l) => l.m === i))) { res.why = 'Last auf Pendelstab'; return res; }

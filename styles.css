@@ -143,6 +143,8 @@ kbd {
 .system svg { display: block; width: 100%; height: min(30vh, 270px); }
 .system.tappable svg { cursor: crosshair; touch-action: none; }
 .system svg.sv-frame { height: min(48vh, 440px); }
+.hinge-strips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; border-top: 1px dashed var(--line); margin-top: 6px; padding-top: 6px; }
+.system .hinge-strips svg.sv-frame { height: auto; max-height: 22vh; }
 
 .answers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .answer {
@@ -165,6 +167,7 @@ kbd {
   font: 400 clamp(1.5rem, 1.1rem + 1.4vw, 2.3rem) var(--font-math);
 }
 .answer .val .katex { font-size: 1.1em; }
+.answer .val-word { font-family: var(--font-ui); font-weight: 600; font-size: 1.35rem; text-align: center; padding: 0 8px; overflow-wrap: anywhere; hyphens: auto; }
 .answer .tag { position: absolute; top: 10px; right: 12px; font: 700 .9rem var(--font-ui); }
 .answer:hover:not(:disabled) { border-color: var(--ink); }
 .answer:hover:not(:disabled) .num { background: var(--marker); color: #1c2330; border-color: #1c2330; }
@@ -255,6 +258,11 @@ kbd {
 .sv-dim { stroke: var(--ink-soft); stroke-width: .9; }
 .sv-angle { fill: none; stroke: var(--load); stroke-width: 1.5; }
 .sv-axis { stroke: var(--ink-soft); stroke-width: 1.4; }
+.sv-gap { fill: var(--sheet); stroke: none; }
+.sv-rel { stroke: var(--ink); stroke-width: 2.4; stroke-linecap: butt; }
+.sv-sleeve { fill: var(--sheet); stroke: var(--ink); stroke-width: 2; }
+.sv-mark { fill: var(--sheet); stroke: var(--warn); stroke-width: 2.4; }
+.sv-mark-text { fill: var(--warn); font-weight: 700; }
 .sv-frame-thin { stroke: var(--ink-soft); stroke-width: 1.6; stroke-linecap: round; }
 text.sv-load-text, text.sv-angle-text { fill: var(--load); font-weight: 600; }
 text.sv-name { fill: var(--ink-soft); font-weight: 700; }
@@ -461,12 +469,14 @@ text.sv-cross-text { font-weight: 700; pointer-events: none; }
   .question { font-size: 1.25rem; }
   .system svg { height: auto; max-height: 38vh; }
   .system svg.sv-frame { height: auto; max-height: 52vh; }
+  .hinge-strips { grid-template-columns: minmax(0, 1fr); }
   .answer svg.sv-frame { height: auto; }
   .answers { gap: 10px; }
   .answer { min-height: 0; padding: 6px 4px 4px; border-radius: var(--radius); }
   .answer svg { height: auto; margin-top: 18px; }
   .answer .num { top: 6px; left: 6px; width: 26px; height: 26px; font-size: .9rem; }
   .answer .val { height: 96px; min-height: 0; font-size: 1.45rem; }
+  .answer .val-word { font-size: 1.02rem; }
   .answer .tag { top: 7px; right: 8px; font-size: .78rem; }
   .solution svg { max-height: none; }
   .boss-page { margin: 0; padding: 28px 22px; }

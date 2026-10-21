@@ -13,7 +13,7 @@
   function save(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { /* privat / gesperrt */ } }
   const settings = load('nvm.settings', {
     time: 'inf', calc: 'formel', incl: 'mix', theme: document.documentElement.dataset.theme || 'light',
-    sound: false, plot: 'tum', learnQtys: ['N', 'V', 'M'], learnTasks: ['verlauf', 'system', 'max', 'null', 'werte'], learnKinds: ['eft', 'krag', 'ueber', 'gerber', 'rahmen'], learnLevel: '2'
+    sound: false, plot: 'tum', learnQtys: ['N', 'V', 'M'], learnTasks: ['verlauf', 'system', 'max', 'null', 'werte', 'gelenk'], learnKinds: ['eft', 'krag', 'ueber', 'gerber', 'rahmen'], learnLevel: '2'
   });
   // Werte aus älteren Versionen übernehmen
   settings.theme = { paper: 'light', board: 'dark' }[settings.theme] || settings.theme;
@@ -28,7 +28,7 @@
     if (k === 'schraeg') settings.incl = 'nur';
     delete settings.learnQty; delete settings.learnTask; delete settings.learnKind;
   }
-  const MULTI = { learnQtys: ['N', 'V', 'M'], learnTasks: ['verlauf', 'system', 'max', 'null', 'werte'], learnKinds: ['eft', 'krag', 'ueber', 'gerber', 'rahmen'] };
+  const MULTI = { learnQtys: ['N', 'V', 'M'], learnTasks: ['verlauf', 'system', 'max', 'null', 'werte', 'gelenk'], learnKinds: ['eft', 'krag', 'ueber', 'gerber', 'rahmen'] };
   for (const k of Object.keys(MULTI)) {
     if (!Array.isArray(settings[k])) settings[k] = MULTI[k].slice();
     settings[k] = settings[k].filter((v) => MULTI[k].includes(v));
@@ -194,6 +194,7 @@
     });
     if (m === 'learn' && !learnPool().length) { toast('Für diese Auswahl gibt es keine Aufgaben'); return; }
     S.level = m === 'learn' ? Number(settings.learnLevel) : 1;
+    $('cheatBtn').hidden = m === 'arcade';
     S.lastType = '';
     showScreen('app');
     nextQuestion();
@@ -257,6 +258,15 @@
 
   function renderSystem(withSol) {
     const q = S.q;
+    if (q.type === 'hingeType' && !withSol) {
+      // System mit Fragezeichen, darunter die drei Verläufe mit derselben Markierung
+      let h = DF.system(q.frDisp, { mode: 'full', narrow: isNarrow(), mark: q.mark }).svg + '<div class="hinge-strips">';
+      for (const Q of ['N', 'V', 'M']) h += DF.diagram(q.fr, q.fsol, Q, { compact: true, cv: q.fcv, mark: q.mark, label: true });
+      $('systemBox').innerHTML = h + '</div>';
+      $('systemBox').classList.remove('tappable');
+      S.map = null;
+      return;
+    }
     if (q.frame) {
       $('systemBox').innerHTML = DF.system(q.fr, { mode: 'full', narrow: isNarrow() }).svg;
       $('systemBox').classList.remove('tappable');
@@ -279,12 +289,13 @@
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'answer';
-      const graphic = q.type.startsWith('diag') || q.type.startsWith('sysFrom') || !!q.frame;
+      const graphic = q.type.startsWith('diag') || q.type.startsWith('sysFrom') || (!!q.frame && q.type !== 'hingeType');
       if (graphic) b.setAttribute('aria-label', `Antwort ${k + 1}`);
       let inner = `<span class="num" aria-hidden="true">${k + 1}</span>`;
-      if (q.frame) inner += DF.diagram(o.fr || q.fr, null, q.qty, { compact: true, cv: o.cv });
+      if (q.frame && q.type !== 'hingeType') inner += DF.diagram(o.fr || q.fr, null, q.qty, { compact: true, cv: o.cv });
       else if (q.type.startsWith('diag')) inner += D.diagram(o.xs.map((x) => x * ca()), o.f, q.qty, Lp(), { compact: true });
       else if (q.type.startsWith('sysFrom')) inner += D.system(o.sys, { mode: 'compact', symbolic: true }).svg;
+      else if (q.type === 'hingeType') inner += `<span class="val val-word">${esc(o.label)}</span>`;
       else inner += `<span class="val">${tex(o.label)}</span>`;   // KaTeX liefert MathML für Bildschirmleser mit
       if (fb) {
         b.disabled = true;
@@ -442,15 +453,15 @@
     const tStr = S.timed ? `${Math.round(S.tMax)} Sekunden` : 'kein Zeitlimit';
     if (S.mode === 'arcade') mode = `Arcade, ${tStr}. Punkte gibt es für Level und Tempo, eine Serie richtiger Antworten verdoppelt sie.`;
     else {
-      const TN = { verlauf: 'Verlauf zum System', system: 'System zum Verlauf', max: 'Maximum antippen', null: 'Nullstelle antippen', werte: 'Werte bestimmen' };
+      const TN = { verlauf: 'Verlauf zum System', system: 'System zum Verlauf', max: 'Maximum antippen', null: 'Nullstelle antippen', werte: 'Werte bestimmen', gelenk: 'Gelenke' };
       const qs = settings.learnQtys.length < 3 ? settings.learnQtys.join(', ') : '';
-      const ts = settings.learnTasks.length < 5 ? settings.learnTasks.map((t) => TN[t]).join(', ') : '';
+      const ts = settings.learnTasks.length < MULTI.learnTasks.length ? settings.learnTasks.map((t) => TN[t]).join(', ') : '';
       const focus = [qs, ts].filter(Boolean).join(' · ');
       mode = `Lernen, Stufe ${S.level}${focus ? ` (${focus})` : ''}, ${tStr}. Nach jeder Antwort bekommst du die Erklärung.`;
     }
     let extra = '';
     if (q.symbolic) extra = '<p class="muted">Die Maße sind als Buchstaben angegeben – gesucht ist die passende Formel.</p>';
-    $('explain').innerHTML = `<p class="tip"><strong>Tipp:</strong> ${tex(q.frame ? N.framegen.tip() : N.randomTip())}</p><p class="muted">${esc(mode)}</p>${extra}`;
+    $('explain').innerHTML = `<p class="tip"><strong>Tipp:</strong> ${tex(q.frame ? N.framegen.tip(q) : N.randomTip())}</p><p class="muted">${esc(mode)}</p>${extra}`;
     $('explain').scrollTop = 0;
   }
 
@@ -613,6 +624,13 @@
         D.diagram(xs, cv.M, 'M', Lc, { compact: true, H: 150 }) +
         `<p class="formula">${tex(c.formula)}</p></article>`;
     }
+    if (N.framegen && DF) {
+      for (const c of N.framegen.hingeCheatCases()) {
+        const so = N.frame.solve(c.fr), cv = N.frame.curves(c.fr, so);
+        h += `<article class="sheet cheat-card"><h2>${esc(c.title)}</h2>` + DF.system(c.fr, { mode: 'compact', symbolic: true, Hmin: 120 }).svg +
+          c.qs.map((Q) => DF.diagram(c.fr, so, Q, { compact: true, cv, label: true, Hmin: 120 })).join('') + `<p class="formula">${tex(c.formula)}</p></article>`;
+      }
+    }
     grid.innerHTML = h;
     const plotLine = settings.plot === 'classic' ? 'M wird positiv nach unten angetragen, N und V positiv nach oben.' : null;
     $('cheatRules').innerHTML = N.RULES.map((r) => `<section><h3>${esc(r.title)}</h3><ul>${r.lines.map((l) => {
@@ -621,7 +639,10 @@
     }).join('')}</ul></section>`).join('');
     cheatBuilt = true;
   }
+  // Im Arcade-Spiel gibt es keinen Spickzettel (fair für die Bestenliste)
+  const cheatLocked = () => S.mode === 'arcade' && visible('app');
   function openCheat() {
+    if (cheatLocked()) { toast('Im Arcade gibt es keinen Spickzettel'); return; }
     if (!cheatBuilt) buildCheat();
     S.cheatFrom = visible('app') ? 'app' : 'menu';
     showScreen('cheat');

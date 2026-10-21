@@ -31,7 +31,10 @@ Pendelstützen), 6 Pendel- und Nullstäbe (Fachwerkunterbau, unterspannte Träge
 Pendelstäben), 7 Klausurniveau, 8 Profi. Rahmen und Stabwerke gibt es nur als „Verlauf zum System“.
 Ihre Schwierigkeit wird aus Größe, Lösungsweg und Lasten berechnet (Stäbe, Gelenke, Ecken, schräge
 Stäbe, Teilsysteme, Nullstäbe, Lastarten), nicht nur aus der Zahl der Lasten.
-- **Spickzettel:** Vorzeichen, Beziehungen, Standardfälle
+- **Gelenke** (Lernen ab Stufe 3, Arcade ab Level 5): Momenten-, Querkraft- und Normalkraftgelenk.
+  „Gelenk erkennen“ zeigt ein System mit Fragezeichen und seine drei Verläufe; bei „Verlauf zum
+  System“ mit Gelenk rechnen die falschen Antworten mit einer anderen Gelenkart
+- **Spickzettel:** Vorzeichen, Beziehungen, Standardfälle, Gelenkarten; im Arcade gesperrt
 - **Bestenliste:** nach dem Arcade einen Namen eintragen (Filter gegen Beleidigungen in App und
   Datenbank) und sehen, auf welchem Platz man steht
 
@@ -51,7 +54,7 @@ Stabwerkslöser gegen die Lösungen der Schnittgrößensammlung (Statik 1, TUM).
 
 ## Tasten
 
-`1`–`4` antworten · `Leertaste` weiter · `L` Lösung · `H` Spickzettel · `T` Hell/Dunkel ·
+`1`–`4` antworten · `Leertaste` weiter · `L` Lösung · `H` Spickzettel (nicht im Arcade) · `T` Hell/Dunkel ·
 `S` Ton · `Esc` Menü
 
 ## Bestenliste einrichten

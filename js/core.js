@@ -1045,6 +1045,11 @@
   // Liefert die möglichen Typen; leer heißt: Kombination gibt es nicht
   function typePool(level, qty, task, kind) {
     let ts;
+    // Gelenke erkennen: ab Stufe 3, bei Gerberträgern und Stabwerken
+    if (task === 'gelenk') {
+      if (level < 3 || !['gerber', 'rahmen', 'alle'].includes(kind) || qty === 'wert') return [];
+      return ['hingeType', 'hingeType', 'hingeDiag'];
+    }
     // Rahmen und Stabwerke: nur Verläufe, ab Stufe 4
     if (kind === 'rahmen') {
       if (level < 4 || (task && task !== 'mix' && task !== 'verlauf') || qty === 'wert') return [];
@@ -1079,6 +1084,7 @@
       const nF = level === 4 ? 3 : level === 5 ? 5 : 7;
       const fq = qty === 'M' || qty === 'V' || qty === 'N' ? ['frame' + qty] : ['frameM', 'frameM', 'frameV', 'frameN'];
       for (let i = 0; i < nF; i++) f.push(fq[i % fq.length]);
+      if (level >= 5 && (!task || task === 'mix')) f.push('hingeType', 'hingeType', 'hingeDiag');
     }
     if (task && task !== 'mix' && TASKS[task]) return f;      // gezielt: lieber leer als etwas anderes
     return f.length ? f : ts;
@@ -1092,7 +1098,7 @@
   function learnPool(qtys, tasks, kinds, level = 1) {
     const pool = [];
     for (const task of tasks) for (const qty of qtys) for (const kind of kinds) {
-      for (const type of new Set(typePool(kind === 'rahmen' ? level : 1, qty, task, kind))) pool.push({ type, qty, task, kind });
+      for (const type of new Set(typePool(kind === 'rahmen' || task === 'gelenk' ? level : 1, qty, task, kind))) pool.push({ type, qty, task, kind });
     }
     return pool;
   }
@@ -1184,6 +1190,11 @@
       if (attempt >= 60) forceType = '';
       if (attempt >= 150) task = 'mix';
       let typ = forceType || pickType(level, qty, task, kind);
+      if (typ === 'hingeType' || typ === 'hingeDiag') {
+        const hq = root.NVM.framegen && root.NVM.framegen.buildHingeQuestion(level, typ === 'hingeType' ? 'type' : 'diag', qty);
+        if (hq) return hq;
+        continue;
+      }
       if (typ.startsWith('frame')) {
         const fq = root.NVM.framegen && root.NVM.framegen.buildFrameQuestion(Math.max(4, level), typ[5]);
         if (fq) return fq;
@@ -1557,6 +1568,7 @@
     { title: 'Randbedingungen', lines: ['Freies Ende ohne Last: N = V = M = 0', 'Gelenkiges Endlager: M = 0', 'Einspannung: M ≠ 0, meist der Extremwert', 'Gelenk im Träger: M = 0', 'Festlager nimmt H auf, Loslager nicht'] },
     { title: 'Schräge Stäbe', lines: ['Lasten zerlegen: quer zur Achse wirken sie auf V und M, längs der Achse auf N.', 'Punktlast F senkrecht: quer F·cos α, längs F·sin α', 'Last je m Grundriss q: quer q·cos²α, längs q·sinα·cosα (je m Stab)', 'Eigengewicht g je m Stab: quer g·cos α, längs g·sin α', 'Senkrechte Lagerkräfte: max M = q·l²/8 mit l = Grundriss', 'Eigenlast, Festlager unten: N am unteren Ende = −A_v·sin α, am oberen Ende = +B_v·sin α', 'Loslager: Lagerkraft ⊥ Gleitebene – sie entscheidet, wo N wirkt.'] },
     { title: 'Standardfälle', lines: ['Einfeldträger, q: A = B = qL/2, max M = qL²/8', 'Einfeldträger, F mittig: max M = FL/4', 'Einfeldträger, F bei a: A = F·b/L, max M = F·a·b/L', 'Einfeldträger, Einzelmoment: |A| = |B| = M₀/L', 'Einfeldträger, Dreieck 0 bis q₀: A = q₀L/6, B = q₀L/3, max M = q₀L²/(9√3) bei x = 0,577·L', 'Einfeldträger, Linienmoment m: |A| = |B| = m, M = 0', 'Kragarm, F am Ende: M = −F·L', 'Kragarm, q: M = −qL²/2', 'Kragarm, Dreieck hoch an der Einspannung: M = −q₀L²/6', 'Kragarm, Dreieck hoch am freien Ende: M = −q₀L²/3', 'Kragarm, Linienmoment m: |M| = m·L, V = 0', 'Kragarm-Überstand a mit q: Stützmoment −qa²/2'] },
+    { title: 'Gelenke', lines: ['Momentengelenk (Kreis): M = 0, überträgt N und V', 'Querkraftgelenk (zwei Querstriche): V = 0, überträgt N und M – ohne Last daneben hat M dort eine waagerechte Tangente', 'Normalkraftgelenk (Hülse): N = 0, überträgt V und M', 'Jedes Gelenk liefert eine zusätzliche Gleichung: die freigegebene Schnittgröße ist dort null'] },
     { title: 'Rahmen und Stabwerke', lines: ['Pendelstab: beidseitig gelenkig, keine Last dazwischen – nur N, konstant, Kraft in Stabrichtung', 'Nullstab 1: unbelasteter Knoten mit zwei Stäben, die nicht auf einer Linie liegen – beide N = 0', 'Nullstab 2: unbelasteter Knoten mit drei Stäben, zwei auf einer Linie – der dritte N = 0', 'Biegesteife Ecke mit zwei Stäben: M läuft ohne Sprung um die Ecke, V des einen Stabs wird N des anderen', 'Gelenk: M = 0, dort schneiden für die fehlende Gleichung', 'Verläufe werden je Stab zur gestrichelten Faser angetragen'] },
     { title: 'Vorgehen', lines: ['Auflagerkräfte aus ΣH = 0, ΣV = 0, ΣM = 0 (und M = 0 am Gelenk)', 'Bereiche zwischen Lasten und Lagern festlegen', 'Im Bereich schneiden, Gleichgewicht am Teilsystem', 'Werte an den Bereichsgrenzen und Extremwerte eintragen', 'Kontrolle: Sprünge, Knicke, Randbedingungen'] }
   ];

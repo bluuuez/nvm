@@ -77,6 +77,33 @@
     return g;
   }
 
+  // Querkraftgelenk: Stab unterbrochen, zwei Querstriche (Sammlung, System 8)
+  // Normalkraftgelenk: Hülse um den Stab (Sammlung, System 12)
+  function releaseMarks(fr, L, compact) {
+    let g = '';
+    const k = compact ? 0.75 : 1;
+    fr.members.forEach((m, i) => {
+      for (const end of ['A', 'B']) {
+        const v = m['relV' + end], n = m['relN' + end];
+        if (!v && !n) continue;
+        const s = scr(fr, i, L), p = end === 'A' ? s.A : s.B, e = s.e, z = s.z;
+        const P = (a, b) => [p[0] + e[0] * a + z[0] * b, p[1] + e[1] * a + z[1] * b];
+        const poly = (pts, cls) => `<polygon points="${pts.map((q) => r1(q[0]) + ',' + r1(q[1])).join(' ')}" class="${cls}"/>`;
+        if (v) {
+          const w = 4 * k, h = 9 * k;
+          g += poly([P(-w, -h), P(w, -h), P(w, h), P(-w, h)], 'sv-gap');
+          g += line(...P(-w, -h), ...P(-w, h), 'sv-rel') + line(...P(w, -h), ...P(w, h), 'sv-rel');
+        } else {
+          const w = 11 * k, h = 6 * k;
+          g += poly([P(-w, -h), P(w, -h), P(w, h), P(-w, h)], 'sv-sleeve');
+          const sg = end === 'A' ? 1 : -1;            // der eigene Stab endet in der Hülse
+          g += line(...P(-sg * w, 0), ...P(sg * w * 0.35, 0), 'sv-rel');
+        }
+      }
+    });
+    return g;
+  }
+
   function supportsSvg(fr, L, compact, lab) {
     let g = '';
     fr.sup.forEach((sp) => {
@@ -233,12 +260,19 @@
     return g;
   }
 
+  // Fragezeichen an einer Stelle (Gelenk erkennen)
+  function markSvg(fr, L, mk, compact) {
+    const n = fr.nodes[mk.n], p = L.P(n.x, n.y), r = compact ? 9 : 12;
+    return `<circle cx="${r1(p[0])}" cy="${r1(p[1])}" r="${r}" class="sv-mark"/>` +
+      `<text x="${r1(p[0])}" y="${r1(p[1] + r * 0.45)}" text-anchor="middle" font-size="${r * 1.35}" class="sv-mark-text">?</text>`;
+  }
+
   // ------------------------------------------------------------ System
   function system(fr, opts = {}) {
     const compact = opts.mode === 'compact', narrow = !compact && !!opts.narrow;
     const W = compact ? 400 : narrow ? 520 : 800;
     const m = compact ? { l: 34, r: 34, t: 44, b: 38 } : { l: 70, r: 100, t: 80, b: 92 };
-    const L = layout(fr, W, compact ? 200 : 300, compact ? 300 : 560, m);
+    const L = layout(fr, W, opts.Hmin || (compact ? 200 : 300), compact ? 300 : 560, m);
     const H = L.H, fs = narrow ? 17 : 15;
     const lab = makeLabeler(fs + 3, W, H);
     let g = '', front = '';
@@ -246,6 +280,8 @@
     g += loadsSvg(fr, L, { compact, symbolic: opts.symbolic }, lab);
     g += supportsSvg(fr, L, compact, lab);
     g += hingeMarks(fr, L, compact);
+    g += releaseMarks(fr, L, compact);
+    if (opts.mark) g += markSvg(fr, L, opts.mark, compact);
     if (!compact) {
       g += dimsSvg(fr, L, W, H, fs);
       lab.box(0, H - 36, W, H);
@@ -266,7 +302,7 @@
     const A = compact ? 28 : 52;                        // größter Ausschlag in px
     const pad = compact ? A + 8 : A + 40;
     const m = { l: pad, r: pad, t: pad, b: pad };
-    const L = layout(fr, W, compact ? 170 : 260, compact ? 280 : 520, m);
+    const L = layout(fr, W, opts.Hmin || (compact ? 170 : 260), compact ? 280 : 520, m);
     const H = L.H;
     const tum = NVM.draw.plotMode() === 'tum';
     const dir = tum || qty === 'M' ? 1 : -1;
@@ -350,7 +386,8 @@
       }
       front += text(W - 8, 16, qty === 'M' ? 'kNm' : 'kN', 'sv-unit', 12, 'end');
     }
-    if (!compact) front += text(18, 30, qty, `sv-qty sv-c-${q}`, 24, 'start');
+    if (opts.mark) front += markSvg(fr, L, opts.mark, compact);
+    if (!compact || opts.label) front += text(compact ? 10 : 18, compact ? 22 : 30, qty, `sv-qty sv-c-${q}`, compact ? 18 : 24, 'start');
     front += lab.resolve();
     return `<svg viewBox="0 0 ${W} ${r1(H)}" class="sv sv-diagram sv-frame">${g}${front}</svg>`;
   }

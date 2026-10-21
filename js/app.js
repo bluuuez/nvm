@@ -424,6 +424,8 @@
 
   function renderFeedback(ok, tag) {
     const q = S.q;
+    let fb = { why: [], sections: [] };
+    try { fb = N.explain.feedback(q, { ok, chosen: S.chosen, clickS: S.clickS, tag }); } catch (e) { /* Erklärung ist Zusatz */ }
     let h = '';
     if (S.pendingEnd) h += '<p class="muted">Mit „Auswertung“ geht es zum Ergebnis.</p>';
     if (ok) {
@@ -431,17 +433,14 @@
       if (S.lastPts) h += `<p class="points">+${S.lastPts} Punkte, Serie ${S.streak}</p>`;
     } else {
       h += `<p class="verdict no">${tag === 'zeit' ? 'Zeit abgelaufen.' : 'Leider falsch.'}</p>`;
-      let why = '';
-      if (S.chosen >= 0 && !isClick()) why = q.opts[S.chosen].expl;
-      else if (isClick() && tag !== 'zeit') why = N.tagExpl(tag, '');
-      if (why) h += `<p class="why">${tex(why)}</p>`;
+      h += fb.why.map((w) => `<p class="why">${tex(w)}</p>`).join('');
       if (S.mode === 'arcade') h += `<p class="points">${S.lives > 0 ? `Noch ${S.lives} Leben.` : 'Keine Leben mehr.'}</p>`;
     }
     let sol = '';
     if (isClick() && !isNaN(S.clickS)) sol += `<p>${tex(`Dein Tipp: x = ${N.fmt(S.clickS * ca(), 2)} m (Toleranz ± ${N.fmt(q.tol * ca(), 2)} m).`)}</p>`;
     sol += q.solLines.map((l) => `<p>${tex(l)}</p>`).join('');
     h += `<div class="sol">${sol}</div>`;
-    h += sectionsHTML(q.explain);
+    h += sectionsHTML(fb.sections);
     $('explain').innerHTML = h;
     $('explain').scrollTop = 0;
   }

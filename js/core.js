@@ -92,7 +92,8 @@
   }
   const isIncl = (sys) => Math.abs(sys.alpha) > 1e-9;
 
-  function pickFree(sys, used, forMoment) {
+  // freie Rasterstelle; awayFrom/minDist: mindestens so weit von einer Stelle entfernt (deutlich sichtbar verschoben)
+  function pickFree(sys, used, forMoment, awayFrom = null, minDist = 0) {
     const L = sys.L, st = sys.st;
     const n = Math.floor(L / st + 1e-9);
     let cand = [];
@@ -102,6 +103,7 @@
     for (const sp of sys.sup) if (!forMoment || sp.type === 'einsp') bl.push(sp.x);
     for (const u of used) bl.push(u);
     cand = cand.filter((c) => bl.every((b) => Math.abs(c - b) > 1e-6));
+    if (awayFrom !== null) cand = cand.filter((c) => Math.abs(c - awayFrom) >= minDist - 1e-9);
     return cand.length ? pick(cand) : null;
   }
 
@@ -492,7 +494,8 @@
     const ip = sys.loads.map((l, i) => i).filter((i) => !['q', 'm'].includes(sys.loads[i].type));
     const usedX = ip.map((i) => sys.loads[i].x);
     for (const i of ip) {
-      const pos = pickFree(sys, usedX, sys.loads[i].type === 'M');
+      // mindestens ein Viertel der Länge versetzt, sonst sieht das kleine Bild fast gleich aus
+      const pos = pickFree(sys, usedX, sys.loads[i].type === 'M', sys.loads[i].x, 0.25 * L);
       if (pos !== null) {
         const s = clone(sys); s.loads[i].x = pos;
         mods.push({ sys: s, tag: 'lastVerschoben', info: '' });
@@ -509,7 +512,7 @@
     if (sys.hinges.length) {
       let cand = [];
       for (let x = sys.st; x < L - 1e-9; x += sys.st) cand.push(Math.round(x * 1e9) / 1e9);
-      cand = cand.filter((c) => Math.abs(c - sys.hinges[0]) > 1e-9 && sys.sup.every((sp) => Math.abs(c - sp.x) > 1e-9));
+      cand = cand.filter((c) => Math.abs(c - sys.hinges[0]) >= 0.2 * L - 1e-9 && sys.sup.every((sp) => Math.abs(c - sp.x) > 1e-9));
       if (cand.length) {
         const s = clone(sys); s.hinges = [pick(cand)];
         mods.push({ sys: s, tag: 'gelenkVerschoben', info: '' });
@@ -543,16 +546,40 @@
     return 0.25;
   }
 
-  function acceptCand(c, ref, keep) {
+  // Verläufe werden in den Antworten einzeln skaliert gezeichnet: verglichen wird die Form.
+  // Formfehler (Knick statt Krümmung) sind auch bei kleinem Abstand gut zu sehen, alles andere muss deutlicher abweichen.
+  const SHAPE_TAGS = ['resultierende', 'verschmiert', 'linear', 'linienmomentKonz'];
+  function acceptCand(c, ref, keep, tag = '') {
     if (!c || !c.length) return false;
     const m = maxAbs(c);
     if (m < 1e-9 || c.some((v) => !isFinite(v))) return false;
     const cn = c.map((v) => v / m);
     const rms = (a, b) => Math.sqrt(sum(a.map((v, i) => (v - b[i]) ** 2)) / a.length);
-    if (rms(cn, ref) < 0.07) return false;
+    const lim = SHAPE_TAGS.includes(tag) ? 0.07 : 0.1;
+    if (rms(cn, ref) < lim) return false;
     for (const k of keep) if (rms(cn, k) < 0.07) return false;
     keep.push(cn);
     return true;
+  }
+
+  // Sehen zwei Systeme im kleinen Bild (ohne Maße) praktisch gleich aus?
+  function visSig(sys) {
+    const L = sys.L, dir = (l) => Math.sign(l.type === 'F' ? (Math.abs(l.v) > 1e-9 ? l.v : l.Fx) : (l.v || l.v2));
+    return {
+      a: Math.round(sys.alpha),
+      sup: sys.sup.map((sp) => ({ t: sp.type, x: sp.x / L })).sort((p, q) => p.x - q.x),
+      hin: sys.hinges.map((h) => h / L).sort((p, q) => p - q),
+      lds: sys.loads.map((l) => ({ t: l.sub, d: dir(l), x: l.x / L, x2: (l.type === 'q' || l.type === 'm' ? l.x2 : l.x) / L, up: l.sub === 'tri' ? Math.sign(Math.abs(l.v2) - Math.abs(l.v)) : 0 }))
+        .sort((p, q) => p.x - q.x || p.t.localeCompare(q.t))
+    };
+  }
+  function looksSame(s1, s2, tol = 0.13) {
+    const A = visSig(s1), B = visSig(s2);
+    if (A.a !== B.a || A.sup.length !== B.sup.length || A.hin.length !== B.hin.length || A.lds.length !== B.lds.length) return false;
+    const near = (p, q) => Math.abs(p - q) <= tol;
+    return A.sup.every((p, i) => p.t === B.sup[i].t && near(p.x, B.sup[i].x)) &&
+      A.hin.every((h, i) => near(h, B.hin[i])) &&
+      A.lds.every((p, i) => { const q = B.lds[i]; return p.t === q.t && p.d === q.d && p.up === q.up && near(p.x, q.x) && near(p.x2, q.x2); });
   }
 
   function sortByPrio(pool) {
@@ -591,7 +618,7 @@
     const ref = fc.map((v) => v / maxAbs(fc));
     const keep = [], sel = [];
     for (const p of pool) {
-      if (acceptCand(p.fc, ref, keep)) sel.push(p);
+      if (acceptCand(p.fc, ref, keep, p.tag)) sel.push(p);
       if (sel.length >= 3) break;
     }
     const inc = isIncl(sys) ? 1 : 0;
@@ -625,8 +652,9 @@
     }
     pool = sortByPrio(pool);
     const keep = [], sel = [];
+    const distinct = (s2) => !looksSame(s2, sys) && sel.every((o) => !looksSame(s2, o.sys));
     for (const p of pool) {
-      if (acceptCand(p.fc, ref, keep)) sel.push(p);
+      if (distinct(p.sys) && acceptCand(p.fc, ref, keep, p.tag)) sel.push(p);
       if (sel.length >= 3) break;
     }
     const inc = isIncl(sys) ? 1 : 0;
@@ -636,7 +664,7 @@
       if (!so2.ok) continue;
       const Mc2 = sgArr(so2, linspace(0, s2.L, 301))[qq];
       if (maxAbs(Mc2) < 1e-9) continue;
-      if (acceptCand(Mc2, ref, keep)) sel.push(mkCand([], [], Mc2, 'anderesSystem', sysTagExpl('anderesSystem', '', qq), s2));
+      if (distinct(s2) && acceptCand(Mc2, ref, keep)) sel.push(mkCand([], [], Mc2, 'anderesSystem', sysTagExpl('anderesSystem', '', qq), s2));
     }
     if (sel.length < 3) return null;
     const all = [mkCand([], [], Mc, 'richtig', '', sys), ...sel.slice(0, 3)];
@@ -1125,8 +1153,7 @@
         const cv = curves(it.sys, sol);
         return {
           type: typ, sys: it.sys, sol, cv, qty: 'M', text: it.text, opts: it.opts, correct: it.correct,
-          target: [], tol: 0, clickTag: '', solLines: it.solLines, symbolic: it.symbolic,
-          explain: explainSystem(it.sys, sol, cv, typ === 'valR' ? 'V' : 'M')
+          target: [], tol: 0, clickTag: '', solLines: it.solLines, symbolic: it.symbolic
         };
       }
       const sys = genSystem(level, kpref, typ === 'diagN' || typ === 'sysFromN', cfg.incl);
@@ -1194,8 +1221,6 @@
         }
       }
       if (!good) continue;
-      const focus = ['diagN', 'sysFromN'].includes(typ) ? 'N' : ['diagV', 'valR', 'clickV0', 'clickVmax', 'sysFromV'].includes(typ) ? 'V' : 'M';
-      q.explain = explainSystem(sys, sol, cv, focus);
       return q;
     }
     throw new Error('Konnte keine Aufgabe erzeugen.');
@@ -1208,73 +1233,8 @@
     ord.forEach((i, k) => { nm[i] = 'ABCD'[k]; });
     return nm;
   }
-  function supTypeName(t, incl) {
-    switch (t) {
-      case 'fest': return 'Festlager';
-      case 'los': return incl ? 'Loslager, waagerecht verschieblich (Lagerkraft senkrecht)' : 'Loslager';
-      case 'losN': return 'Loslager, parallel zur Stabachse verschieblich (Lagerkraft ⊥ Stab)';
-      default: return 'Einspannung';
-    }
-  }
-  const dirH = (Fx) => (Fx > 0 ? 'nach rechts' : 'nach links');
-  function loadDesc(ld, ca = 1) {
-    const x = ld.x * ca, x2 = ld.x2 * ca;
-    let bs = '';
-    if (ca < 0.9999 && ld.type === 'q') bs = ld.basis === 'proj' ? ' je m Grundriss' : ' je m Stablänge';
-    switch (ld.sub) {
-      case 'F': return `Einzellast F = ${fmtN(ld.v)} kN bei x = ${fmtL(x)} m`;
-      case 'Fs': return `Schräge Last F = ${fmtN(ld.mag)} kN unter ${Math.round(ld.ang)}° bei x = ${fmtL(x)} m, zerlegt: F_v = ${fmt(ld.v)} kN, F_h = ${fmt(Math.abs(ld.Fx))} kN ${dirH(ld.Fx)}`;
-      case 'H': return `Horizontalkraft H = ${fmtN(Math.abs(ld.Fx))} kN ${dirH(ld.Fx)} bei x = ${fmtL(x)} m`;
-      case 'M': return `Einzelmoment M = ${fmtN(Math.abs(ld.v))} kNm ${ld.v > 0 ? 'im Uhrzeigersinn' : 'gegen den Uhrzeigersinn'} bei x = ${fmtL(x)} m`;
-      case 'tri': return `Dreieckslast 0 … ${fmtN(ld.mag)} kN/m${bs} von x = ${fmtL(x)} bis ${fmtL(x2)} m`;
-      case 'mq': return `Linienmoment m = ${fmtN(Math.abs(ld.v))} kNm/m ${ld.v > 0 ? 'im Uhrzeigersinn' : 'gegen den Uhrzeigersinn'} von x = ${fmtL(x)} bis ${fmtL(x2)} m`;
-      default: return `Gleichstreckenlast q = ${fmtN(ld.v)} kN/m${bs} von x = ${fmtL(x)} bis ${fmtL(x2)} m`;
-    }
-  }
   function momentAtSupport(sol, x, L) {
     return sgAt(sol, x <= L / 2 ? x + 1e-6 * L : x - 1e-6 * L).M;
-  }
-
-  function explainSystem(sys, sol, cv, focus) {
-    const names = supNames(sys);
-    const ca = sys.ca, incl = isIncl(sys);
-    const secSys = [];
-    if (incl) {
-      secSys.push(`${sys.name}: Grundriss l = ${fmtL(sys.L * ca)} m, Höhe h = ${fmtL(Math.abs(sys.L * sys.sa))} m, Stablänge s = ${fmtL(sys.L)} m`);
-      secSys.push(`Neigung α = ${fmt(Math.abs(sys.alpha))}° (sin α = ${fmt(Math.abs(sys.sa), 3)}, cos α = ${fmt(ca, 3)})`);
-    } else secSys.push(`${sys.name}, L = ${fmtL(sys.L)} m`);
-    sys.sup.forEach((sp, i) => secSys.push(`${names[i]}: ${supTypeName(sp.type, incl)} bei x = ${fmtL(sp.x * ca)} m`));
-    sys.hinges.forEach((h) => secSys.push(`Gelenk bei x = ${fmtL(h * ca)} m`));
-    const secLoads = sys.loads.map((ld) => loadDesc(ld, ca));
-    const hasH = sys.loads.some((l) => Math.abs(l.Fx) > 1e-9) || incl;
-    const secR = [];
-    sol.unk.forEach((u, j) => {
-      const r = sol.R[j], nm = names[u.s];
-      if (u.c === 'V') secR.push(`${nm}_v = ${fmt(r)} kN (${r >= 0 ? 'nach oben' : 'nach unten!'})`);
-      else if (u.c === 'H') { if (hasH) secR.push(`${nm}_h = ${fmt(r)} kN (${r >= 0 ? 'nach rechts' : 'nach links'})`); }
-      else if (u.c === 'N') secR.push(`${nm}_⊥ = ${fmt(r)} kN (senkrecht zur Stabachse)`);
-      else secR.push(`Einspannmoment bei ${nm}: M = ${fmt(momentAtSupport(sol, u.x, sys.L))} kNm`);
-    });
-    const secV = [];
-    let i1 = 0, i2 = 0;
-    cv.M.forEach((v, i) => { if (v > cv.M[i1]) i1 = i; if (v < cv.M[i2]) i2 = i; });
-    if (cv.M[i1] > 1e-6) secV.push(`max M = ${fmt(cv.M[i1])} kNm bei x = ${fmt(cv.xs[i1] * ca, 2)} m (Zug unten)`);
-    if (cv.M[i2] < -1e-6) secV.push(`min M = ${fmt(cv.M[i2])} kNm bei x = ${fmt(cv.xs[i2] * ca, 2)} m (Zug oben)`);
-    secV.push(`|V|max = ${fmt(maxAbs(cv.V))} kN`);
-    if (maxAbs(cv.N) > 1e-6) {
-      let i3 = 0; cv.N.forEach((v, i) => { if (Math.abs(v) > Math.abs(cv.N[i3])) i3 = i; });
-      secV.push(`|N|max = ${fmt(Math.abs(cv.N[i3]))} kN (${cv.N[i3] > 0 ? 'Zug' : 'Druck'})`);
-    }
-    const sections = [
-      { title: 'System', lines: secSys },
-      { title: 'Lasten', lines: secLoads },
-      { title: 'Auflagerkräfte', lines: secR },
-      { title: 'Wichtige Werte', lines: secV }
-    ];
-    const cl = classicLine(sys);
-    if (cl) sections.push({ title: 'Standardfall', lines: [cl] });
-    sections.push({ title: 'So erkennst du den Verlauf', lines: featureRules(sys, focus) });
-    return sections;
   }
 
   function featureRules(sys, focus) {
@@ -1295,7 +1255,11 @@
       if (sys.kind === 'eft' && !sys.sup.some((s) => s.type === 'losN')) R.push('Senkrechte Lagerkräfte: Der M-Verlauf ist derselbe wie beim waagerechten Träger mit der Grundrissspannweite l.');
       R.push('Die Normalkraft hängt davon ab, welches Lager die Längskomponente aufnimmt. Eine Lagerkraft steht immer senkrecht zur Gleitebene.');
     }
-    if (sys.kind === 'krag') R.push('Kragarm: Am freien Ende ist M = 0 (ohne Endmoment), an der Einspannung ist |M| am größten – Zug oben, also M < 0.');
+    if (sys.kind === 'krag') {
+      const onlyForces = sys.loads.every((l) => !['M', 'm', 'mq'].includes(l.type));
+      R.push('Kragarm: Am freien Ende ist M = 0 (ohne Endmoment), an der Einspannung ist |M| am größten' +
+        (onlyForces ? ' – bei Lasten von oben Zug oben, also M < 0.' : '; ob Zug oben oder unten, hängt von der Drehrichtung der Lasten ab.'));
+    }
     else if (sys.kind === 'ueber') R.push('Über dem Innenlager entsteht ein negatives Stützmoment (Zug oben), das unbelastete Kragende hat M = 0.');
     else if (sys.kind === 'gerber') R.push('Gelenk: Dort ist M = 0. Erst den Einhängeträger lösen, seine Gelenkkraft belastet den Kragträger.');
     else R.push('Gelenkige Endlager: M = 0 an beiden Enden (außer bei einem Einzelmoment direkt am Lager).');
@@ -1599,7 +1563,7 @@
     mkLoad, mkSup, baseSys, setIncline, isIncl, genSystem,
     loadArrays, solveSys, sgAt, sgArr, eqVec, curves, critPts, distRes, pickQ,
     systemMods, classicCase, classicItem, buildQuestion, pickType, typePool, learnPool, nextPick, LEVEL_INFO, levelInfo, isClickType, isValType,
-    clusterRanges, supNames, explainSystem, momentAtSupport,
+    clusterRanges, supNames, momentAtSupport, looksSame, featureRules, classicLine,
     tagExpl, tagLabel, praise, randomTip, rankName, RULES, cheatCases
   };
   root.NVM = Object.assign(root.NVM || {}, NVM);

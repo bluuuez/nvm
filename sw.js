@@ -3,7 +3,7 @@
  * Seite, Code und Stile: mit Netz immer die neueste Version (Speicher nur als Rückfall).
  * Schriften, Icons und KaTeX ändern sich nicht: direkt aus dem Speicher.
  * VERSION erhöhen, wenn sich Dateien ändern, damit alte Speicherstände gelöscht werden. */
-const VERSION = 'nvm-v19';
+const VERSION = 'nvm-v20';
 const FILES = [
   './',
   'fonts.css',
@@ -17,6 +17,7 @@ const FILES = [
   'js/core.js',
   'js/draw.js',
   'js/math.js',
+  'js/explain.js',
   'katex/katex.min.css',
   'katex/katex.min.js',
   'icons/apple-touch-icon.png',

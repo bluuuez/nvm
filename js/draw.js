@@ -50,6 +50,30 @@
   function text(x, y, s, cls, size, anchor = 'middle', extra = '') {
     return `<text x="${r1(x)}" y="${r1(y)}" class="${cls}" font-size="${size}" text-anchor="${anchor}" ${extra}>${svgTex(s, cls)}</text>`;
   }
+  // Linienzug in Pixeln vereinfachen (Douglas-Peucker): gerade Abschnitte brauchen nur ihre Endpunkte.
+  // Sichtbar ändert sich nichts (Abweichung unter 0,3 px), das SVG wird aber viel kleiner und schneller gezeichnet.
+  function simplify(pts, tol = 0.3) {
+    const n = pts.length;
+    if (n < 3) return pts;
+    const keep = new Uint8Array(n), tol2 = tol * tol, stack = [0, n - 1];
+    keep[0] = keep[n - 1] = 1;
+    while (stack.length) {
+      const b = stack.pop(), a = stack.pop();
+      const ax = pts[a][0], ay = pts[a][1], dx = pts[b][0] - ax, dy = pts[b][1] - ay, L2 = dx * dx + dy * dy;
+      let dm = -1, im = -1;
+      for (let i = a + 1; i < b; i++) {
+        let px = pts[i][0] - ax, py = pts[i][1] - ay;
+        if (L2 > 1e-12) { const t = Math.max(0, Math.min(1, (px * dx + py * dy) / L2)); px -= t * dx; py -= t * dy; }
+        const d = px * px + py * py;
+        if (d > dm) { dm = d; im = i; }
+      }
+      if (dm > tol2) { keep[im] = 1; stack.push(a, im, im, b); }
+    }
+    return pts.filter((p, i) => keep[i]);
+  }
+  const ptsAttr = (P) => P.map((p) => r1(p[0]) + ',' + r1(p[1])).join(' ');
+  const pathD = (P) => P.map((p, i) => (i ? 'L' : 'M') + r1(p[0]) + ' ' + r1(p[1])).join('');
+
   function line(x1, y1, x2, y2, cls, extra = '') {
     return `<line x1="${r1(x1)}" y1="${r1(y1)}" x2="${r1(x2)}" y2="${r1(y2)}" class="${cls}" ${extra}/>`;
   }
@@ -633,13 +657,15 @@
     const dir = plotMode === 'tum' || qty === 'M' ? 1 : -1;
     const Y = (v) => yc + dir * v / s * A;
     const n = xs.length;
+    // Linienzug mit Anfang und Ende auf der Achse
     const poly = (vals) => {
-      let pts = `${r1(X(xs[0]))},${r1(yc)} `;
-      for (let i = 0; i < n; i++) pts += `${r1(X(xs[i]))},${r1(Y(vals[i]))} `;
-      return pts + `${r1(X(xs[n - 1]))},${r1(yc)}`;
+      const P = [[X(xs[0]), yc]];
+      for (let i = 0; i < n; i++) P.push([X(xs[i]), Y(vals[i])]);
+      P.push([X(xs[n - 1]), yc]);
+      return simplify(P);
     };
-    g += `<polygon points="${poly(f.map((v) => Math.max(v, 0)))}" class="sv-fill sv-f-${q}"/>`;
-    g += `<polygon points="${poly(f.map((v) => Math.min(v, 0)))}" class="sv-fill sv-f-${q}"/>`;
+    g += `<polygon points="${ptsAttr(poly(f.map((v) => Math.max(v, 0))))}" class="sv-fill sv-f-${q}"/>`;
+    g += `<polygon points="${ptsAttr(poly(f.map((v) => Math.min(v, 0))))}" class="sv-fill sv-f-${q}"/>`;
     // Schraffur
     let hp = '';
     for (let i = 1; i < 48; i++) {
@@ -648,10 +674,7 @@
     }
     if (hp) g += `<path d="${hp}" class="sv-hatchline sv-c-${q}"/>`;
     g += line(X(0), yc, X(Lp), yc, 'sv-axis');
-    let d = `M${r1(X(xs[0]))} ${r1(yc)}`;
-    for (let i = 0; i < n; i++) d += `L${r1(X(xs[i]))} ${r1(Y(f[i]))}`;
-    d += `L${r1(X(xs[n - 1]))} ${r1(yc)}`;
-    g += `<path d="${d}" class="sv-curve sv-c-${q}${opts.animate ? ' sv-draw' : ''}" pathLength="1"/>`;
+    g += `<path d="${pathD(poly(f))}" class="sv-curve sv-c-${q}${opts.animate ? ' sv-draw' : ''}" pathLength="1"/>`;
 
     // Vorzeichen in den Flächen
     const sg = f.map((v) => (v > 0.03 * s ? 1 : v < -0.03 * s ? -1 : 0));
@@ -714,6 +737,6 @@
   root.NVM.draw = {
     system, diagram, htmlTex, svgTex, esc, setPlotMode, plotMode: () => plotMode,
     // Bausteine für drawframe.js
-    _: { text, line, arrow, arrowL, makeLabeler, support, supDepth, momentArc, beamSvg, FIB, SUP, dimTick, r1, esc }
+    _: { text, line, arrow, arrowL, makeLabeler, support, supDepth, momentArc, beamSvg, FIB, SUP, dimTick, r1, esc, simplify, ptsAttr, pathD }
   };
 })(typeof window !== 'undefined' ? window : globalThis);

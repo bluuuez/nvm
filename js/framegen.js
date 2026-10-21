@@ -19,8 +19,11 @@
   const rnd = Math.random;
   const randi = (a, b) => a + Math.floor(rnd() * (b - a + 1));
   const pick = (a) => a[Math.floor(rnd() * a.length)];
-  const clone = (o) => JSON.parse(JSON.stringify(o));
-  const maxAbs = (a) => a.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
+  // Stabwerk kopieren (Knoten, Stäbe, Lager und Lasten sind flache Objekte; schneller als JSON hin und zurück)
+  const cp = (a) => a.map((o) => Object.assign({}, o));
+  const clone = (fr) => Object.assign({}, fr, { nodes: cp(fr.nodes), members: cp(fr.members), sup: cp(fr.sup), loads: cp(fr.loads) });
+  // größter Betrag (Schleife statt reduce: läuft in den Antwort-Vergleichen sehr oft); NaN bleibt NaN
+  function maxAbs(a) { let m = 0; for (const v of a) { const x = Math.abs(v); if (x > m) m = x; else if (x !== x) return NaN; } return m; }
   const EPS = 1e-6;
 
   // ------------------------------------------------------------ Baukasten
@@ -409,11 +412,12 @@
       if (!fr.loads.length) continue;
       const sol = F.solve(fr);
       if (!sol.ok) continue;
+      const d = difficulty(fr, sol);
+      const dist = d.D < band[0] ? band[0] - d.D : d.D > band[1] ? d.D - band[1] : 0;
+      if (dist > 0 && dist >= bestDist) continue;          // nicht besser als der bisher beste: Verläufe gar nicht erst rechnen
       const cv = F.curves(fr, sol, 40);
       if (!sane(cv)) continue;
-      const d = difficulty(fr, sol);
       fr.D = d.D;
-      const dist = d.D < band[0] ? band[0] - d.D : d.D > band[1] ? d.D - band[1] : 0;
       if (dist === 0) return { fr, sol, cv, d };
       if (dist < bestDist) { bestDist = dist; best = { fr, sol, cv, d }; }
     }
@@ -442,9 +446,12 @@
   }
   // keine absurden Zahlen (riesige Werte durch fast parallele Stäbe usw.)
   function sane(cv) {
-    const all = cv.flatMap((c) => [...c.N, ...c.V, ...c.M]);
-    const m = maxAbs(all);
-    return m > 1e-6 && m < 2000 && all.every(isFinite);
+    let m = 0;
+    for (const c of cv) for (const a of [c.N, c.V, c.M]) for (const v of a) {
+      if (!isFinite(v)) return false;
+      if (Math.abs(v) > m) m = Math.abs(v);
+    }
+    return m > 1e-6 && m < 2000;
   }
 
   // ------------------------------------------------------------ Antworten
@@ -453,9 +460,9 @@
     const out = [];
     for (const c of cv) {
       const L = c.s[c.s.length - 1];
-      for (let k = 0; k < SAMP; k++) {
+      for (let k = 0, j = 1; k < SAMP; k++) {
         const s = L * (0.002 + 0.996 * k / (SAMP - 1));
-        let j = c.s.findIndex((v) => v >= s); if (j < 1) j = 1;
+        while (j < c.s.length - 1 && c.s[j] < s) j++;
         const t = (s - c.s[j - 1]) / Math.max(c.s[j] - c.s[j - 1], 1e-12);
         out.push(c[qty][j - 1] + (c[qty][j] - c[qty][j - 1]) * t);
       }
@@ -637,16 +644,24 @@
     N: 'Normalkraftgelenk (Hülse): N = 0, V und M werden übertragen.'
   };
   // Funktion entlang des geraden Trägers (für Vergleiche über verschiedene Stabteilungen hinweg)
-  function beamVec(fr, sol, qty) {
-    const xs = fr.nodes.map((n) => n.x), x0 = Math.min(...xs), x1 = Math.max(...xs), out = [];
+  // N, V und M in einem Durchgang; das Ergebnis wird je Variante gemerkt (siehe bvOf)
+  function beamVecs(fr, sol) {
+    const xs = fr.nodes.map((n) => n.x), x0 = Math.min(...xs), x1 = Math.max(...xs);
+    const segs = [];
+    fr.members.forEach((m, i) => {
+      const A = fr.nodes[m.a], B = fr.nodes[m.b];
+      if (Math.abs(A.y - B.y) < EPS) segs.push({ i, ax: A.x, lo: Math.min(A.x, B.x), hi: Math.max(A.x, B.x) });
+    });
+    const out = { N: [], V: [], M: [] };
     for (let k = 0; k <= 60; k++) {
       const x = x0 + (x1 - x0) * (0.004 + 0.992 * k / 60);
-      const i = fr.members.findIndex((m) => { const a = fr.nodes[m.a].x, b = fr.nodes[m.b].x; return x >= Math.min(a, b) && x <= Math.max(a, b) && Math.abs(fr.nodes[m.a].y - fr.nodes[m.b].y) < EPS; });
-      if (i < 0) { out.push(0); continue; }
-      out.push(F.at(sol, i, Math.abs(x - fr.nodes[fr.members[i].a].x))[qty]);
+      const sg = segs.find((g) => x >= g.lo && x <= g.hi);
+      const r = sg ? F.at(sol, sg.i, Math.abs(x - sg.ax)) : { N: 0, V: 0, M: 0 };
+      out.N.push(r.N); out.V.push(r.V); out.M.push(r.M);
     }
     return out;
   }
+  const bvOf = (o) => o.bv || (o.bv = beamVecs(o.fr, o.sol));
   // einfacher Träger mit einem Gelenk, bei dem alle drei Gelenkarten statisch bestimmt sind
   function genHinge(stage, type) {
     for (let t = 0; t < 80; t++) {
@@ -665,10 +680,8 @@
       for (const h of ['M', 'V', 'N']) {
         if (h === fr.hingeType) { vars[h] = { fr, sol, cv }; continue; }
         const f2 = setHinge(clone(fr), h), s2 = F.solve(f2);
-        if (!s2.ok) { ok = false; break; }
-        const c2 = F.curves(f2, s2, 40);
-        if (!sane(c2)) { ok = false; break; }
-        vars[h] = { fr: f2, sol: s2, cv: c2 };
+        if (!s2.ok || !sane(F.curves(f2, s2, 20))) { ok = false; break; }   // grob abgetastet reicht für die Plausibilität
+        vars[h] = { fr: f2, sol: s2 };
       }
       if (!ok) continue;
       const d = difficulty(fr, sol); fr.D = d.D;
@@ -680,7 +693,7 @@
   function hingeQty(g, want) {
     const qs = want && want !== 'mix' ? [want] : ['M', 'M', 'V', 'N'].sort(() => rnd() - 0.5);
     for (const q of qs) {
-      const v = ['M', 'V', 'N'].map((h) => norm(beamVec(g.vars[h].fr, g.vars[h].sol, q)));
+      const v = ['M', 'V', 'N'].map((h) => norm(bvOf(g.vars[h])[q]));
       if (v.some((x) => !x)) continue;
       if (rms(v[0], v[1]) > 0.12 && rms(v[0], v[2]) > 0.12 && rms(v[1], v[2]) > 0.12) return q;
     }
@@ -710,7 +723,7 @@
       // nicht direkt an eine Last (das Symbol läge unter dem Pfeil)
       const lx = g.fr.loads.map((l) => (l.n !== undefined ? g.fr.nodes[l.n].x : l.type === 'q' ? null : g.fr.nodes[g.fr.members[l.m].a].x + F.geom(g.fr, l.m).e[0] * l.s)).filter((v) => v !== null);
       for (let x = 1; x < L; x++) if (Math.abs(x - xg) >= 2 && lx.every((v) => Math.abs(v - x) >= 1 - EPS)) cand.push(x);
-      const vs = opts.map((o) => norm(beamVec(o.fr, o.sol, qty)));
+      const vs = ['M', 'V', 'N'].map((h) => norm(bvOf(g.vars[h])[qty]));
       if (vs.some((v) => !v)) continue;
       // verschobenes Gelenk: muss einen anderen Verlauf ergeben (in einem unbelasteten Bereich ändert sich oft nichts)
       let moved = null;
@@ -719,7 +732,7 @@
         if (!f2) continue;
         const s2 = F.solve(f2);
         if (!s2.ok || !sane(F.curves(f2, s2, 20))) continue;
-        const v = norm(beamVec(f2, s2, qty));
+        const v = norm(beamVecs(f2, s2)[qty]);
         if (v && vs.every((w) => rms(v, w) >= 0.12)) { moved = { fr: f2, sol: s2, tag: 'gelenkOrt' }; vs.push(v); break; }
       }
       if (!moved) continue;

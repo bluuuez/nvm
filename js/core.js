@@ -27,7 +27,8 @@
   const atan2d = (y, x) => Math.atan2(y, x) * 180 / Math.PI;
   const clone = (o) => JSON.parse(JSON.stringify(o));
   const sum = (a) => a.reduce((s, v) => s + v, 0);
-  const maxAbs = (a) => a.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
+  // größter Betrag (Schleife statt reduce: läuft in den Antwort-Vergleichen sehr oft); NaN bleibt NaN
+  function maxAbs(a) { let m = 0; for (const v of a) { const x = Math.abs(v); if (x > m) m = x; else if (x !== x) return NaN; } return m; }
   function linspace(a, b, n) {
     const r = new Array(n);
     for (let i = 0; i < n; i++) r[i] = a + (b - a) * i / (n - 1);
@@ -549,12 +550,16 @@
   // Verläufe werden in den Antworten einzeln skaliert gezeichnet: verglichen wird die Form.
   // Formfehler (Knick statt Krümmung) sind auch bei kleinem Abstand gut zu sehen, alles andere muss deutlicher abweichen.
   const SHAPE_TAGS = ['resultierende', 'verschmiert', 'linear', 'linienmomentKonz'];
+  function rms(a, b) {
+    let s = 0;
+    for (let i = 0; i < a.length; i++) s += (a[i] - b[i]) ** 2;
+    return Math.sqrt(s / a.length);
+  }
   function acceptCand(c, ref, keep, tag = '') {
     if (!c || !c.length) return false;
     const m = maxAbs(c);
-    if (m < 1e-9 || c.some((v) => !isFinite(v))) return false;
+    if (!(m >= 1e-9) || !isFinite(m)) return false;
     const cn = c.map((v) => v / m);
-    const rms = (a, b) => Math.sqrt(sum(a.map((v, i) => (v - b[i]) ** 2)) / a.length);
     const lim = SHAPE_TAGS.includes(tag) ? 0.07 : 0.1;
     if (rms(cn, ref) < lim) return false;
     for (const k of keep) if (rms(cn, k) < 0.07) return false;
@@ -1045,7 +1050,7 @@
   // Liefert die möglichen Typen; leer heißt: Kombination gibt es nicht
   function typePool(level, qty, task, kind) {
     let ts;
-    // Gelenke erkennen: ab Stufe 3, bei Gerberträgern und Stabwerken
+    // Gelenk-Aufgaben (Träger mit Momenten-, Querkraft- oder Normalkraftgelenk): ab Stufe 3
     if (task === 'gelenk') {
       if (level < 3 || !['gerber', 'rahmen', 'alle'].includes(kind) || qty === 'wert') return [];
       return ['hingeDiag', 'hingeDiag', 'hingeSys'];

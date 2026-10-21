@@ -27,7 +27,8 @@
 
   const cosd = (d) => Math.cos(d * Math.PI / 180);
   const sind = (d) => Math.sin(d * Math.PI / 180);
-  const maxAbs = (a) => a.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
+  // größter Betrag (Schleife statt reduce: läuft in den Antwort-Vergleichen sehr oft); NaN bleibt NaN
+  function maxAbs(a) { let m = 0; for (const v of a) { const x = Math.abs(v); if (x > m) m = x; else if (x !== x) return NaN; } return m; }
 
   function geom(fr, i) {
     const m = fr.members[i], A = fr.nodes[m.a], B = fr.nodes[m.b];
@@ -64,21 +65,23 @@
     return { P, Mp, D, Da };
   }
 
-  function partRes(d, x) {
-    const [x1, x2, q1, q2] = d;
-    const u = Math.min(Math.max(x, x1), x2), len = u - x1;
-    const qu = q1 + (q2 - q1) * (u - x1) / (x2 - x1);
-    const R = (q1 + qu) / 2 * len, den = q1 + qu;
-    const c = Math.abs(den) > 1e-12 ? len * (q1 + 2 * qu) / (3 * den) : len / 2;
-    return [R, c];
-  }
-  // Anteil der Stablasten links von s (ohne Anfangswerte)
+  // Anteil der Stablasten links von s (ohne Anfangswerte); läuft sehr oft, darum ohne Hilfsarrays
   function loadPart(la, s) {
     let n = 0, v = 0, m = 0;
     for (const p of la.P) if (p[0] < s) { n -= p[2]; v -= p[1]; m -= p[1] * (s - p[0]); }
     for (const q of la.Mp) if (q[0] < s) m += q[1];
-    for (const d of la.D) { const [R, c] = partRes(d, s); v -= R; m -= R * (s - (d[0] + c)); }
-    for (const d of la.Da) { n -= partRes(d, s)[0]; }
+    for (const d of la.D) {
+      if (s <= d[0]) continue;
+      const u = s < d[1] ? s : d[1], len = u - d[0], qu = d[2] + (d[3] - d[2]) * len / (d[1] - d[0]);
+      const den = d[2] + qu, R = den / 2 * len;
+      const c = Math.abs(den) > 1e-12 ? len * (d[2] + 2 * qu) / (3 * den) : len / 2;
+      v -= R; m -= R * (s - (d[0] + c));
+    }
+    for (const d of la.Da) {
+      if (s <= d[0]) continue;
+      const u = s < d[1] ? s : d[1], len = u - d[0], qu = d[2] + (d[3] - d[2]) * len / (d[1] - d[0]);
+      n -= (d[2] + qu) / 2 * len;
+    }
     return { n, v, m };
   }
 
@@ -236,13 +239,14 @@
   function curves(fr, sol, n = 60) {
     return sol.mem.map((m, i) => {
       const cr = critS(fr, i, m.l);
-      let ss = [];
-      for (let k = 0; k <= n; k++) ss.push(m.l * k / n);
+      const raw = [];
+      for (let k = 0; k <= n; k++) raw.push(Math.round(m.l * k / n * 1e9) / 1e9);
       const eps = 1e-6 * m.l;
-      for (const c of cr) ss.push(Math.max(0, c - eps), Math.min(m.l, c + eps));
-      ss = [...new Set(ss.map((v) => Math.round(v * 1e9) / 1e9))].sort((p, q) => p - q);
+      for (const c of cr) raw.push(Math.round(Math.max(0, c - eps) * 1e9) / 1e9, Math.round(Math.min(m.l, c + eps) * 1e9) / 1e9);
+      raw.sort((p, q) => p - q);
+      const ss = raw.filter((v, k) => k === 0 || v !== raw[k - 1]);
       const N = [], V = [], M = [];
-      for (const s of ss) { const r = at(sol, i, s); N.push(r.N); V.push(r.V); M.push(r.M); }
+      for (const s of ss) { const lp = loadPart(m.la, s); N.push(m.N0 + lp.n); V.push(m.V0 + lp.v); M.push(m.M0 + m.V0 * s + lp.m); }
       const sc = Math.max(maxAbs(N), maxAbs(V), maxAbs(M), 1);
       const cl = (a) => a.map((v) => (Math.abs(v) < 1e-7 * sc ? 0 : v));
       return { s: ss, N: cl(N), V: cl(V), M: cl(M), crit: cr };

@@ -46,16 +46,26 @@
     mode: 'arcade', state: 'menu', q: null, level: 1, score: 0, lives: 3, streak: 0, bestStreak: 0,
     nCorrect: 0, nAsked: 0, mistakes: {}, tMax: 30, tLeft: 30, timed: false,
     solShown: false, chosen: -1, clickS: NaN, lastType: '', lastPts: 0, pendingEnd: false, levelUp: '',
-    map: null, boss: false, cheatFrom: 'menu', fresh: true
+    map: null, boss: false, cheatFrom: 'menu', fresh: true, qid: 0
   };
   const narrowMQ = window.matchMedia('(max-width: 640px)');
   const isNarrow = () => narrowMQ.matches;
 
   // ---------------------------------------------------------- Bildschirme
+  // Nach oben scrollen erst im nächsten Bild: sofort gesetzt erzwingt jedes Scrollen ein komplettes Layout
+  // der gerade neu gezeichneten Seite (kostete beim Antworten fast die Hälfte der Zeit)
+  const toTop = new Set();
+  function scrollToTop(el) {
+    if (!toTop.size) requestAnimationFrame(() => {
+      for (const t of toTop) { if (t === window) window.scrollTo(0, 0); else t.scrollTop = 0; }
+      toTop.clear();
+    });
+    toTop.add(el);
+  }
   const screens = ['app', 'menu', 'end', 'cheat', 'board'];
   function showScreen(name) {
     for (const s of screens) $(s).hidden = s !== name;
-    window.scrollTo(0, 0);
+    scrollToTop(window);
   }
   const visible = (id) => !$(id).hidden;
 
@@ -204,18 +214,25 @@
     nextQuestion();
   }
 
-  function nextQuestion(force) {
+  function makeQuestion(force) {
     const c = cfg();
-    if (force) S.q = N.buildQuestion(S.level, 'mix', 'alle', force, c);
-    else if (S.mode === 'learn') {
+    if (force) return N.buildQuestion(S.level, 'mix', 'alle', force, c);
+    if (S.mode === 'learn') {
       const p = N.nextPick(learnPool(), S.lastType);
-      S.q = N.buildQuestion(S.level, p.qty, p.kind, p.type, Object.assign(c, { task: p.task }));
-    } else {
-      // Arcade: alles gemischt, aber nicht zweimal derselbe Aufgabentyp hintereinander
-      let t = N.pickType(S.level, 'mix', 'mix', 'alle');
-      for (let i = 0; i < 12 && t === S.lastType; i++) t = N.pickType(S.level, 'mix', 'mix', 'alle');
-      S.q = N.buildQuestion(S.level, 'mix', 'alle', t, c);
+      return N.buildQuestion(S.level, p.qty, p.kind, p.type, Object.assign(c, { task: p.task }));
     }
+    // Arcade: alles gemischt, aber nicht zweimal derselbe Aufgabentyp hintereinander
+    let t = N.pickType(S.level, 'mix', 'mix', 'alle');
+    for (let i = 0; i < 12 && t === S.lastType; i++) t = N.pickType(S.level, 'mix', 'mix', 'alle');
+    return N.buildQuestion(S.level, 'mix', 'alle', t, c);
+  }
+  function nextQuestion(force) {
+    let q = null;
+    try { q = makeQuestion(force); } catch (e) { q = null; }
+    // Rückfall, falls der Zufall einmal keine passende Aufgabe findet: lieber eine einfache Aufgabe als ein Hänger
+    if (!q) { try { q = N.buildQuestion(Math.min(S.level, 3), 'M', 'alle', 'diagM', cfg()); } catch (e) { q = null; } }
+    if (!q) { toast('Gerade konnte keine Aufgabe erzeugt werden'); goMenu(); return; }
+    S.q = q; S.qid++;
     S.lastType = S.q.type;
     S.tMax = timeFor(); S.timed = isFinite(S.tMax); S.tLeft = S.tMax;
     S.state = 'question'; S.solShown = false; S.chosen = -1; S.clickS = NaN; S.fresh = true;
@@ -226,7 +243,7 @@
     renderIntro();
     updateHud();
     updateButtons();
-    window.scrollTo(0, 0);
+    scrollToTop(window);
     startTimer();
   }
 
@@ -306,6 +323,22 @@
       b.addEventListener('click', () => answer(k));
       box.appendChild(b);
     });
+    box.dataset.qid = S.qid;
+    box.dataset.marked = fb ? '1' : '';
+  }
+  // Nach der Antwort die vorhandenen Knöpfe nur markieren, statt alle Bilder neu zu zeichnen
+  function markAnswers() {
+    const q = S.q, box = $('answers'), bs = box.children;
+    if (bs.length !== q.opts.length || box.dataset.qid !== String(S.qid)) { renderAnswers(true); return; }
+    if (box.dataset.marked) return;
+    [...bs].forEach((b, k) => {
+      b.disabled = true;
+      if (k === q.correct) { b.classList.add('is-correct'); b.insertAdjacentHTML('beforeend', '<span class="tag">Richtig</span>'); }
+      else if (k === S.chosen) { b.classList.add('is-wrong'); b.insertAdjacentHTML('beforeend', '<span class="tag">Deine Wahl</span>'); }
+      else b.classList.add('is-dim');
+      if (!S.fresh) b.classList.add('no-anim');
+    });
+    box.dataset.marked = '1';
   }
 
   function answer(k) {
@@ -400,7 +433,7 @@
     S.pendingEnd = S.mode === 'arcade' && S.lives <= 0;
     save('nvm.stats', stats);
     $('hint').textContent = ok ? (S.lastPts ? `Richtig, +${S.lastPts} Punkte.` : 'Richtig.') : (tag === 'zeit' ? 'Zeit abgelaufen.' : 'Leider falsch – die Erklärung steht unten.');
-    if (isClick() || (!ok && S.mode === 'learn')) showSolution(); else renderQuestion();
+    if (isClick() || (!ok && S.mode === 'learn')) showSolution(); else markAnswers();
     S.fresh = false;
     renderFeedback(ok, tag);
     updateHud();
@@ -412,7 +445,7 @@
     const q = S.q;
     S.solShown = true;
     // Nach der Antwort bleiben die markierten Antworten sichtbar, damit man Wahl und Lösung vergleichen kann
-    if (!isClick() && S.state === 'feedback') { $('answers').hidden = false; renderAnswers(true); } else $('answers').hidden = true;
+    if (!isClick() && S.state === 'feedback') { $('answers').hidden = false; markAnswers(); } else $('answers').hidden = true;
     $('tapinfo').hidden = true;
     renderSystem(true);
     if (q.frame) {
@@ -460,7 +493,7 @@
     let extra = '';
     if (q.symbolic) extra = '<p class="muted">Die Maße sind als Buchstaben angegeben – gesucht ist die passende Formel.</p>';
     $('explain').innerHTML = `<p class="tip"><strong>Tipp:</strong> ${tex(q.frame ? N.framegen.tip(q) : N.randomTip(q.sys))}</p><p class="muted">${esc(mode)}</p>${extra}`;
-    $('explain').scrollTop = 0;
+    scrollToTop($('explain'));
   }
 
   function renderFeedback(ok, tag) {
@@ -483,7 +516,7 @@
     h += `<div class="sol">${sol}</div>`;
     h += sectionsHTML(fb.sections);
     $('explain').innerHTML = h;
-    $('explain').scrollTop = 0;
+    scrollToTop($('explain'));
   }
 
   function updateHud() {

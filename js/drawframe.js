@@ -6,7 +6,7 @@
   'use strict';
   const NVM = root.NVM;
   const { fmt, fmtL, fmtN } = NVM;
-  const { text, line, arrowL, makeLabeler, support, momentArc, beamSvg, FIB, SUP, dimTick, r1, esc } = NVM.draw._;
+  const { text, line, arrowL, makeLabeler, support, momentArc, beamSvg, FIB, SUP, dimTick, r1, esc, simplify, ptsAttr, pathD } = NVM.draw._;
   const F = NVM.frame;
 
   const uniq = (a, d = 1e-6) => a.slice().sort((p, q) => p - q).filter((v, i, s) => !i || v - s[i - 1] > d);
@@ -328,29 +328,27 @@
       const s = scr(fr, i, L), f = c[qty];
       const pt = (k, v) => { const p = s.at(c.s[k]); const o = dir * v / smax * A; return [p[0] + s.z[0] * o, p[1] + s.z[1] * o]; };
       if (Math.max(...f.map(Math.abs)) < 1e-9 * smax) return;
-      // Flächen getrennt nach Vorzeichen
+      // Flächen getrennt nach Vorzeichen (Linienzüge vereinfacht, siehe draw.js)
       for (const sg of [1, -1]) {
         const pts = [s.at(c.s[0])];
         for (let k = 0; k < c.s.length; k++) pts.push(pt(k, sg > 0 ? Math.max(f[k], 0) : Math.min(f[k], 0)));
         pts.push(s.at(c.s[c.s.length - 1]));
-        g += `<polygon points="${pts.map((p) => r1(p[0]) + ',' + r1(p[1])).join(' ')}" class="sv-fill sv-f-${q}"/>`;
+        g += `<polygon points="${ptsAttr(simplify(pts))}" class="sv-fill sv-f-${q}"/>`;
       }
       // Schraffur senkrecht zum Stab
       let hp = '';
       const nh = Math.max(4, Math.round(s.len / (compact ? 7 : 9)));
-      for (let k = 1; k < nh; k++) {
+      for (let k = 1, j = 1; k < nh; k++) {
         const ss = c.s[c.s.length - 1] * k / nh;
-        let j = c.s.findIndex((v) => v >= ss); if (j < 1) j = 1;
+        while (j < c.s.length - 1 && c.s[j] < ss) j++;
         const t = (ss - c.s[j - 1]) / Math.max(c.s[j] - c.s[j - 1], 1e-12), v = f[j - 1] + (f[j] - f[j - 1]) * t;
         const p0 = s.at(ss), o = dir * v / smax * A;
         if (Math.abs(o) > 1.5) hp += `M${r1(p0[0])} ${r1(p0[1])}L${r1(p0[0] + s.z[0] * o)} ${r1(p0[1] + s.z[1] * o)}`;
       }
       if (hp) g += `<path d="${hp}" class="sv-hatchline sv-c-${q}"/>`;
-      let d = `M${r1(s.A[0])} ${r1(s.A[1])}`;
-      for (let k = 0; k < c.s.length; k++) { const p = pt(k, f[k]); d += `L${r1(p[0])} ${r1(p[1])}`; }
-      d += `L${r1(s.B[0])} ${r1(s.B[1])}`;
-      g += `<path d="${d}" class="sv-curve sv-c-${q}${opts.animate ? ' sv-draw' : ''}" pathLength="1"/>`;
-      for (let k = 1; k < c.s.length; k++) { const a = pt(k - 1, f[k - 1]), b = pt(k, f[k]); lab.seg(a[0], a[1], b[0], b[1]); }
+      const curve = simplify(c.s.map((sv, k) => pt(k, f[k])));
+      g += `<path d="${pathD([s.A, ...curve, s.B])}" class="sv-curve sv-c-${q}${opts.animate ? ' sv-draw' : ''}" pathLength="1"/>`;
+      for (let k = 1; k < curve.length; k++) lab.seg(curve[k - 1][0], curve[k - 1][1], curve[k][0], curve[k][1]);
 
       // Vorzeichen
       const n = f.length;

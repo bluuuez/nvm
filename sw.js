@@ -4,7 +4,7 @@
  * Schriften, Icons und KaTeX ändern sich nicht: direkt aus dem Speicher.
  * VERSION erhöhen, wenn sich Dateien ändern, damit alte Speicherstände gelöscht werden.
  * Dieselbe Nummer steht als ?v= an Skripten und Stilen in index.html: So lädt eine neue Seite nie alte Skripte. */
-const VERSION = 'nvm-v28';
+const VERSION = 'nvm-v29';
 const FILES = [
   './',
   'fonts.css',
@@ -72,8 +72,11 @@ self.addEventListener('fetch', (e) => {
     const hit = await cache.match(req, { ignoreSearch: true });
     const fallback = () => hit || (req.mode === 'navigate' ? cache.match('index.html') : undefined);
     if (hit && STATIC.test(url.pathname)) return hit;
-    // Netz zuerst; 'no-cache' fragt den Server, statt eine alte Kopie aus dem Browser-Cache zu nehmen
-    const net = fetch(req, { cache: 'no-cache' }).then((res) => {
+    // Netz zuerst; 'no-cache' fragt den Server, statt eine alte Kopie aus dem Browser-Cache zu nehmen.
+    // Die Seite selbst mit eigenem Suchparameter holen: GitHub Pages hält index.html sonst bis zu 10 Minuten im CDN.
+    const page = req.mode === 'navigate' || url.pathname.endsWith('/') || url.pathname.endsWith('/index.html');
+    const netReq = page ? new Request(url.origin + url.pathname + '?frisch=' + Date.now(), { cache: 'no-store', credentials: 'same-origin' }) : req;
+    const net = fetch(netReq, page ? undefined : { cache: 'no-cache' }).then((res) => {
       if (res && res.ok) cache.put(req, res.clone());
       return res;
     });

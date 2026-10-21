@@ -134,7 +134,10 @@
       } else {
         // bevorzugt unten; nur wenn dort ein Stab im Weg ist (weniger als 60° Abstand), oben, links oder rechts
         const ok = (c) => { const v = [Math.cos(c * Math.PI / 180), Math.sin(c * Math.PI / 180)]; return !dirs.some((d) => d[0] * v[0] + d[1] * v[1] > 0.5); };
-        const v = [90, 270, 180, 0].find(ok) ?? freest(dirs, [90, 270, 180, 0]);   // Bildschirmwinkel (90 = nach unten)
+        // unten, sonst zur Außenseite des Systems, erst dann oben
+        const cx = fr.nodes.reduce((a, q) => a + q.x, 0) / fr.nodes.length, out = n.x < cx ? 180 : 0;
+        const order = [90, out, 270, 180 - out];
+        const v = order.find(ok) ?? freest(dirs, order);   // Bildschirmwinkel (90 = nach unten)
         rot = v - 90;
       }
       g += support(p[0], p[1], sp.type, rot, outw, compact, 1, true);
@@ -200,7 +203,18 @@
         return (m.a === ld.n && lq.s1 < 1e-9) || (m.b === ld.n && lq.s2 > l - 1e-9);
       });
       if (touch) len += qMax + 10;
-      const tip = [p[0] - u[0] * 3, p[1] - u[1] * 3], tail = [tip[0] - u[0] * len, tip[1] - u[1] * len];
+      // liegt der Pfeil auf einem Stab (z. B. waagerechte Kraft am waagerechten Stab), daneben zeichnen
+      const along = [];
+      if (ld.m !== undefined) { const e = scr(fr, ld.m, L).e; along.push(e, [-e[0], -e[1]]); }
+      else along.push(...nodeDirs(fr, ld.n, L));
+      const onBar = along.some((d) => d[0] * -u[0] + d[1] * -u[1] > 0.97);
+      let sh = [0, 0];
+      if (onBar) {
+        let nrm = [-u[1], u[0]];
+        if (Math.abs(nrm[1]) > 0.3 ? nrm[1] > 0 : nrm[0] > 0) nrm = [-nrm[0], -nrm[1]];   // nach oben bzw. links
+        sh = [nrm[0] * 12, nrm[1] * 12];
+      }
+      const tip = [p[0] - u[0] * 3 + sh[0], p[1] - u[1] * 3 + sh[1]], tail = [tip[0] - u[0] * len, tip[1] - u[1] * len];
       g += arrowL(lab, tail[0], tail[1], tip[0], tip[1], 'sv-load', head, compact ? 1.8 : 2.4);
       if (!opts.noLabels) {
         const str = sym ? 'F' : compact ? fmtN(Fm) : `F = ${fmtN(Fm)} kN`;
@@ -265,7 +279,7 @@
     const compact = opts.mode === 'compact', narrow = !compact && !!opts.narrow;
     const W = compact ? 400 : narrow ? 520 : 800;
     const m = compact ? { l: 34, r: 34, t: 44, b: 38 } : { l: 70, r: 100, t: 80, b: 92 };
-    const L = layout(fr, W, opts.Hmin || (compact ? 200 : 300), compact ? 300 : 560, m);
+    const L = layout(fr, W, opts.Hmin || (compact ? 200 : 250), compact ? 300 : 560, m);
     const H = L.H, fs = narrow ? 17 : 15;
     const lab = makeLabeler(fs + 3, W, H);
     let g = '', front = '';

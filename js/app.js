@@ -103,7 +103,8 @@
           // Aufgaben ohne passende Kombination ausgrauen (z. B. N + Maximum antippen); die Wahl bleibt gespeichert
           const can = key !== 'learnTasks' || taskExists(b.dataset.v);
           b.disabled = !can;
-          b.title = can ? '' : 'Gibt es für die gewählten Schnittgrößen und Tragwerke nicht';
+          const lowHinge = b.dataset.v === 'gelenk' && Number(settings.learnLevel) < 3;
+          b.title = can ? '' : lowHinge ? 'Gelenke gibt es ab Stufe 3' : b.dataset.v === 'gelenk' ? 'Gelenke gibt es bei Gerberträgern und Rahmen' : 'Gibt es für die gewählten Schnittgrößen und Tragwerke nicht';
           b.setAttribute('aria-pressed', String(can && settings[key].includes(b.dataset.v)));
         } else {
           b.setAttribute('role', 'radio');
@@ -112,12 +113,15 @@
       });
     });
     const lv = Number(settings.learnLevel), info = N.levelInfo(lv);
-    $('levelDesc').innerHTML = `<strong>Stufe ${lv}, ${esc(info.name)}:</strong> ${esc(info.loads)} Die Stufe bestimmt Größe der Systeme und Zahl der Lasten, die Tragwerke wählst du oben.`;
+    const later = [];
+    if (lv < 3 && settings.learnTasks.includes('gelenk')) later.push('Gelenke ab Stufe 3');
+    if (lv < 4 && settings.learnKinds.includes('rahmen')) later.push('Rahmen und Stabwerke ab Stufe 4');
+    $('levelDesc').innerHTML = `<strong>Stufe ${lv}, ${esc(info.name)}:</strong> ${esc(info.loads)} Die Stufe bestimmt Größe der Systeme und Zahl der Lasten, die Tragwerke wählst du oben.` +
+      (later.length ? ` <span class="muted">Später dazu: ${esc(later.join(', '))}.</span>` : '');
     const empty = !learnPool().length;
     const onlyFrames = settings.learnKinds.length === 1 && settings.learnKinds[0] === 'rahmen';
     let warn = '';
     if (empty) warn = onlyFrames && lv < 4 ? 'Rahmen und Stabwerke gibt es ab Stufe 4.' : onlyFrames ? 'Rahmen und Stabwerke gibt es nur bei „Verlauf zum System“.' : 'Für diese Auswahl gibt es keine Aufgaben. Wähle eine weitere Schnittgröße, Aufgabe oder ein anderes Tragwerk.';
-    else if (settings.learnKinds.includes('rahmen') && lv < 4) warn = 'Rahmen und Stabwerke kommen erst ab Stufe 4 dran.';
     $('learnWarn').hidden = !warn;
     $('learnWarn').textContent = warn;
     $('soundBtn').setAttribute('aria-pressed', String(!!settings.sound));
@@ -156,7 +160,7 @@
     if (S.mode === 'arcade') {
       // Rahmen brauchen mehr Zeit; nach der letzten Stufe wird es nur noch knapper
       let t = Math.max(16, 34 - 3 * Math.min(S.level, 6));
-      if (S.q && S.q.frame) t += 14;
+      if (S.q && S.q.frame) t += S.q.type.startsWith('frame') ? 14 : 6;
       if (S.level > N.MAX_LEVEL) t = Math.max(12, t - 2 * (S.level - N.MAX_LEVEL));
       return t;
     }
@@ -286,7 +290,7 @@
       const graphic = q.type.startsWith('diag') || q.type.startsWith('sysFrom') || !!q.frame;
       if (graphic) b.setAttribute('aria-label', `Antwort ${k + 1}`);
       let inner = `<span class="num" aria-hidden="true">${k + 1}</span>`;
-      if (q.type === 'hingeSys') inner += DF.system(o.fr, { mode: 'compact', Hmin: 150 }).svg;
+      if (q.type === 'hingeSys') inner += DF.system(o.fr, { mode: 'compact', Hmin: 150, symbolic: true }).svg;
       else if (q.frame) inner += DF.diagram(o.fr || q.fr, null, q.qty, { compact: true, cv: o.cv });
       else if (q.type.startsWith('diag')) inner += D.diagram(o.xs.map((x) => x * ca()), o.f, q.qty, Lp(), { compact: true });
       else if (q.type.startsWith('sysFrom')) inner += D.system(o.sys, { mode: 'compact', symbolic: true }).svg;
@@ -455,7 +459,7 @@
     }
     let extra = '';
     if (q.symbolic) extra = '<p class="muted">Die Maße sind als Buchstaben angegeben – gesucht ist die passende Formel.</p>';
-    $('explain').innerHTML = `<p class="tip"><strong>Tipp:</strong> ${tex(q.frame ? N.framegen.tip(q) : N.randomTip())}</p><p class="muted">${esc(mode)}</p>${extra}`;
+    $('explain').innerHTML = `<p class="tip"><strong>Tipp:</strong> ${tex(q.frame ? N.framegen.tip(q) : N.randomTip(q.sys))}</p><p class="muted">${esc(mode)}</p>${extra}`;
     $('explain').scrollTop = 0;
   }
 

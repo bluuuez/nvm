@@ -1115,9 +1115,9 @@
     { name: 'Fortgeschritten', short: 'Neu: Gerberträger, zwei Lasten.', systems: 'dazu Gerberträger', loads: 'Ein bis zwei Lasten, auch schräge und waagerechte Einzelkräfte.' },
     { name: 'Erste Rahmen', short: 'Neu: Kragwinkel, Knick- und Treppenträger.', systems: 'Träger mit zwei Lasten, dazu Kragwinkel, Knick- und Treppenträger und abgespannte Träger', loads: 'Träger mit zwei Lasten. Neu: kleine Rahmen mit einer Last – Kragwinkel, Knick- und Treppenträger, abgespannte Träger.' },
     { name: 'Rahmen', short: 'Neu: Rahmen und Gelenkträger auf Pendelstützen.', systems: 'dazu Rahmen, Dreigelenkrahmen und Gelenkträger auf Pendelstützen', loads: 'Träger mit zwei bis drei Lasten. Rahmen, Dreigelenkrahmen und Gelenkträger auf Pendelstützen mit ein bis zwei Lasten.' },
-    { name: 'Pendel- und Nullstäbe', short: 'Pendel- und Nullstäbe erkennen.', systems: 'dazu Fachwerkunterbau, unterspannte Träger und Stäbe auf Pendelstäben', loads: 'Stabwerke, bei denen du Pendel- und Nullstäbe erkennen musst: Fachwerkunterbau, unterspannte Träger, Stäbe auf Pendelstäben.' },
-    { name: 'Klausurniveau', short: 'Größere Stabwerke wie in der Sammlung.', systems: 'dazu Gelenkträger mit Rahmenecke und Giebelrahmen mit Zugband', loads: 'Größere Stabwerke wie in der Schnittgrößensammlung, meist zwei Lasten.' },
-    { name: 'Profi', short: 'Die größten Stabwerke.', systems: 'alle, die größten Systeme', loads: 'Die größten Stabwerke mit zwei bis drei Lasten.' }
+    { name: 'Pendel- und Nullstäbe', short: 'Pendel- und Nullstäbe erkennen.', systems: 'dazu Fachwerkunterbau, unterspannte Träger und Stäbe auf Pendelstäben', loads: 'Träger mit zwei bis drei Lasten. Stabwerke, bei denen du Pendel- und Nullstäbe erkennen musst: Fachwerkunterbau, unterspannte Träger, Stäbe auf Pendelstäben.' },
+    { name: 'Klausurniveau', short: 'Größere Stabwerke wie in der Sammlung.', systems: 'dazu Gelenkträger mit Rahmenecke und Giebelrahmen mit Zugband', loads: 'Träger mit zwei bis drei Lasten. Größere Stabwerke wie in der Schnittgrößensammlung, meist mit zwei Lasten.' },
+    { name: 'Profi', short: 'Die größten Stabwerke.', systems: 'alle, die größten Systeme', loads: 'Träger mit zwei bis drei Lasten. Die größten Stabwerke, ebenfalls mit zwei bis drei Lasten.' }
   ];
   const levelInfo = (lv) => LEVEL_INFO[Math.max(1, Math.min(LEVEL_INFO.length, lv)) - 1];
   const MAX_LEVEL = LEVEL_INFO.length;
@@ -1322,7 +1322,7 @@
         (onlyForces ? ' – bei Lasten von oben Zug oben, also M < 0.' : '; ob Zug oben oder unten, hängt von der Drehrichtung der Lasten ab.'));
     }
     else if (sys.kind === 'ueber') R.push('Über dem Innenlager entsteht ein Stützmoment – bei Lasten von oben negativ (Zug oben). Am freien Kragende ist M = 0 (ohne Endmoment).');
-    else if (sys.kind === 'gerber') R.push('Gelenk: Dort ist M = 0. Erst den Einhängeträger lösen, seine Gelenkkraft belastet den Kragträger.');
+    else if (sys.kind === 'gerber') R.push('Gelenk (Momentengelenk): Dort ist M = 0. Erst den Einhängeträger lösen, seine Gelenkkraft belastet den Kragträger.');
     else R.push('Gelenkige Endlager: M = 0 an beiden Enden (außer bei einem Einzelmoment direkt am Lager).');
     if (focus === 'V') R.push('V ist die Steigung der Momentenlinie: V = dM/dx. Jedes Auflager ist eine Einzelkraft, also ein Sprung in V.');
     else if (focus === 'N') R.push('N > 0 ist Zug, N < 0 Druck. N ändert sich nur durch Kräfte längs der Stabachse.');
@@ -1533,26 +1533,28 @@
   const tagLabel = (t) => TAG_LABELS[t] || t;
 
   const praise = () => pick(['Sauber.', 'Stark.', 'Genau so.', 'Volltreffer.', 'Wie im Lehrbuch.', 'Das sitzt.', 'Prüfingenieur-Niveau.', 'Statisch bestimmt richtig.']);
-  const randomTip = () => pick([
-    'Unter einer Gleichstreckenlast ist M eine Parabel und V eine Gerade.',
-    'Wo V das Vorzeichen wechselt, hat M sein Extremum.',
-    'Ein Einzelmoment macht einen Sprung in M – V springt dort nicht.',
-    'Am freien Kragarmende sind M und V null, solange dort keine Last angreift.',
-    'Am Gelenk ist M immer null.',
-    'Nur das Festlager nimmt Horizontalkräfte auf.',
-    'M wird auf der Zugseite angetragen: Zug unten heißt positiv und nach unten gezeichnet.',
-    'Einzellast: Sprung in V, Knick in M.',
-    'Dreieckslast: V quadratisch, M kubisch.',
-    'Über dem Innenlager eines Trägers mit Kragarm ist das Moment bei Lasten von oben negativ.',
-    'Einfeldträger mit Gleichstreckenlast: max M = qL²/8.',
-    'Kragarm mit Einzellast am Ende: M an der Einspannung = −F·L.',
-    'Schräger Stab: Lasten in Komponenten längs und quer zur Stabachse zerlegen.',
-    'Schräger Einfeldträger mit Grundrisslast und senkrechten Lagerkräften: max M = q·l²/8 mit l = Grundriss.',
-    'Loslager: Die Lagerkraft steht senkrecht zur Gleitebene.',
-    'Linienmoment: V ändert sich darunter nicht, M ändert nur seine Steigung (dM/dx = V − m).',
-    'Einfeldträger mit konstantem Linienmoment: M = 0 im ganzen Träger.',
-    'Kragarm mit Linienmoment: V = 0, M linear bis m·L an der Einspannung.'
-  ]);
+  // Tipps mit Bedingung: es kommen nur Tipps, die zur aktuellen Aufgabe passen
+  const TIPS = [
+    ['Unter einer Gleichstreckenlast ist M eine Parabel und V eine Gerade.', (s) => s.loads.some((l) => l.type === 'q' && l.sub !== 'tri')],
+    ['Wo V das Vorzeichen wechselt, hat M sein Extremum.', () => true],
+    ['Ein Einzelmoment macht einen Sprung in M – V springt dort nicht.', (s) => s.loads.some((l) => l.type === 'M')],
+    ['Am freien Kragarmende sind M und V null, solange dort keine Last angreift.', (s) => s.kind === 'krag' || s.kind === 'ueber'],
+    ['Am Gelenk (Momentengelenk) ist M null.', (s) => s.hinges && s.hinges.length > 0],
+    ['Nur das Festlager nimmt Horizontalkräfte auf.', (s) => s.loads.some((l) => l.type === 'F' && Math.abs(l.Fx) > 1e-9) || isIncl(s)],
+    ['M wird auf der Zugseite angetragen: Zug unten heißt positiv und nach unten gezeichnet.', () => true],
+    ['Einzellast: Sprung in V, Knick in M.', (s) => s.loads.some((l) => l.type === 'F')],
+    ['Dreieckslast: V quadratisch, M kubisch.', (s) => s.loads.some((l) => l.sub === 'tri')],
+    ['Über dem Innenlager eines Trägers mit Kragarm ist das Moment bei Lasten von oben negativ.', (s) => s.kind === 'ueber'],
+    ['Einfeldträger mit Gleichstreckenlast: max M = qL²/8.', (s) => s.kind === 'eft' && !isIncl(s) && s.loads.some((l) => l.type === 'q')],
+    ['Kragarm mit Einzellast am Ende: M an der Einspannung = −F·L.', (s) => s.kind === 'krag' && s.loads.some((l) => l.type === 'F')],
+    ['Schräger Stab: Lasten in Komponenten längs und quer zur Stabachse zerlegen.', (s) => isIncl(s)],
+    ['Schräger Einfeldträger mit Grundrisslast und senkrechten Lagerkräften: max M = q·l²/8 mit l = Grundriss.', (s) => isIncl(s) && s.kind === 'eft'],
+    ['Loslager: Die Lagerkraft steht senkrecht zur Gleitebene.', (s) => isIncl(s) || s.sup.some((sp) => sp.type === 'losN')],
+    ['Linienmoment: V ändert sich darunter nicht, M ändert nur seine Steigung (dM/dx = V − m).', (s) => s.loads.some((l) => l.type === 'm')],
+    ['Einfeldträger mit konstantem Linienmoment: M = 0 im ganzen Träger.', (s) => s.kind === 'eft' && s.loads.some((l) => l.type === 'm')],
+    ['Kragarm mit Linienmoment: V = 0, M linear bis m·L an der Einspannung.', (s) => s.kind === 'krag' && s.loads.some((l) => l.type === 'm')]
+  ];
+  const randomTip = (sys) => pick(TIPS.filter(([, ok]) => { try { return !sys || ok(sys); } catch (e) { return false; } }).map(([t]) => t));
   function rankName(s) {
     const th = [0, 1000, 2500, 5000, 8000, 12000, 18000];
     const nm = ['Erstsemester', 'Übungsgruppen-Stammgast', 'Tutor', 'Wissenschaftliche Hilfskraft', 'Tragwerksplaner', 'Prüfingenieur', 'Statik-Legende'];
@@ -1564,8 +1566,8 @@
   const RULES = [
     { title: 'Vorzeichen', lines: ['x zeigt nach rechts, z nach unten, die gestrichelte Faser liegt auf der +z-Seite.', 'N > 0 ist Zug, N < 0 Druck.', 'V > 0 zeigt am positiven Schnittufer in +z-Richtung, also nach unten.', 'M > 0 heißt Zug an der gestrichelten Faser (unten).', 'Alle Schnittgrößen werden positiv zur gestrichelten Faser hin angetragen.'] },
     { title: 'Differentialbeziehungen', lines: ['dN/dx = −n, dV/dx = −q, dM/dx = V − m', 'n, q: Streckenlasten längs und quer; m: Linienmoment (gegen den Uhrzeigersinn positiv)', 'q = 0: V konstant, M linear', 'q konstant: V linear, M quadratische Parabel', 'q linear (Dreieck): V quadratische, M kubische Parabel', 'n konstant: N linear', 'm konstant: V unverändert, M ändert seine Steigung um −m', 'M ist extremal, wo dM/dx = V − m = 0 ist.'] },
-    { title: 'Sprünge und Knicke', lines: ['Einzellast quer: Sprung in V um die Last, Knick in M', 'Einzellast längs: Sprung in N', 'Einzelmoment M₀: Sprung in M um M₀, kein Sprung in V', 'Linienmoment: kein Sprung, nur andere Steigung in M', 'Auflager = Einzelkraft: Sprung in V', 'Gelenk: M = 0; Knick in M nur, wenn am Gelenk eine Einzellast angreift'] },
-    { title: 'Randbedingungen', lines: ['Freies Ende ohne Last: N = V = M = 0', 'Gelenkiges Endlager: M = 0', 'Einspannung: M ≠ 0, meist der Extremwert', 'Gelenk im Träger: M = 0', 'Festlager nimmt H auf, Loslager nicht'] },
+    { title: 'Sprünge und Knicke', lines: ['Einzellast quer: Sprung in V um die Last, Knick in M', 'Einzellast längs: Sprung in N', 'Einzelmoment M₀: Sprung in M um M₀, kein Sprung in V', 'Linienmoment: kein Sprung, nur andere Steigung in M', 'Auflager = Einzelkraft: Sprung in V', 'Momentengelenk (Gerbergelenk): M = 0; Knick in M nur, wenn am Gelenk eine Einzellast angreift'] },
+    { title: 'Randbedingungen', lines: ['Freies Ende ohne Last: N = V = M = 0', 'Gelenkiges Endlager: M = 0', 'Einspannung: M ≠ 0, meist der Extremwert', 'Momentengelenk im Träger: M = 0', 'Festlager nimmt H auf, Loslager nicht'] },
     { title: 'Schräge Stäbe', lines: ['Lasten zerlegen: quer zur Achse wirken sie auf V und M, längs der Achse auf N.', 'Punktlast F senkrecht: quer F·cos α, längs F·sin α', 'Last je m Grundriss q: quer q·cos²α, längs q·sinα·cosα (je m Stab)', 'Eigengewicht g je m Stab: quer g·cos α, längs g·sin α', 'Senkrechte Lagerkräfte: max M = q·l²/8 mit l = Grundriss', 'Eigenlast, Festlager unten: N am unteren Ende = −A_v·sin α, am oberen Ende = +B_v·sin α', 'Loslager: Lagerkraft ⊥ Gleitebene – sie entscheidet, wo N wirkt.'] },
     { title: 'Standardfälle', lines: ['Einfeldträger, q: A = B = qL/2, max M = qL²/8', 'Einfeldträger, F mittig: max M = FL/4', 'Einfeldträger, F bei a: A = F·b/L, max M = F·a·b/L', 'Einfeldträger, Einzelmoment: |A| = |B| = M₀/L', 'Einfeldträger, Dreieck 0 bis q₀: A = q₀L/6, B = q₀L/3, max M = q₀L²/(9√3) bei x = 0,577·L', 'Einfeldträger, Linienmoment m: |A| = |B| = m, M = 0', 'Kragarm, F am Ende: M = −F·L', 'Kragarm, q: M = −qL²/2', 'Kragarm, Dreieck hoch an der Einspannung: M = −q₀L²/6', 'Kragarm, Dreieck hoch am freien Ende: M = −q₀L²/3', 'Kragarm, Linienmoment m: |M| = m·L, V = 0', 'Kragarm-Überstand a mit q: Stützmoment −qa²/2'] },
     { title: 'Gelenke', lines: ['Momentengelenk (Kreis): M = 0, überträgt N und V', 'Querkraftgelenk (zwei Querstriche): V = 0, überträgt N und M – ohne Last daneben hat M dort eine waagerechte Tangente', 'Normalkraftgelenk (Hülse): N = 0, überträgt V und M', 'Jedes Gelenk liefert eine zusätzliche Gleichung: die freigegebene Schnittgröße ist dort null'] },

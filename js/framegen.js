@@ -805,9 +805,9 @@
     resultierende: 'Hier wurde die Streckenlast als Einzellast gerechnet. Unter einer Streckenlast ist M gekrümmt, nicht geknickt.',
     lastVerschoben: 'Die Einzellast sitzt in diesem Verlauf an einer anderen Stelle – der Knick bzw. Sprung liegt falsch.',
     pendelRichtung: 'Die Kraft eines Pendelstabs wirkt immer in Stabrichtung. Hier wurde sie mit einer anderen Richtung gerechnet.',
-    gelenkM: 'Hier wurde das Gelenk als Momentengelenk gerechnet (M = 0). Das Symbol zeigt aber ein anderes Gelenk.',
-    gelenkV: 'Hier wurde das Gelenk als Querkraftgelenk gerechnet (V = 0). Das Symbol zeigt aber ein anderes Gelenk.',
-    gelenkN: 'Hier wurde das Gelenk als Normalkraftgelenk gerechnet (N = 0). Das Symbol zeigt aber ein anderes Gelenk.',
+    gelenkM: 'Hier wurde das Gelenk als Momentengelenk gerechnet (M = 0).',
+    gelenkV: 'Hier wurde das Gelenk als Querkraftgelenk gerechnet (V = 0).',
+    gelenkN: 'Hier wurde das Gelenk als Normalkraftgelenk gerechnet (N = 0).',
     gelenkOrt: 'Das Gelenk sitzt in diesem System an einer anderen Stelle – dort müsste die freigegebene Schnittgröße null sein.'
   };
   function feedback(q, ans) {
@@ -818,7 +818,10 @@
       const h = opt.tag[6];
       why.push(`System ${ans.chosen + 1} hat ein ${HINGE_NAME[h]}: dort wäre ${h} = 0. ${HINGE_RULE[h]} Der gezeigte Verlauf passt nur zum ${HINGE_NAME[fr.hingeType]}.`);
     }
-    else if (!ans.ok && opt) { const t = opt.tag === 'faser' && q.qty === 'V' ? 'faserV' : opt.tag; if (WHY[t]) why.push(WHY[t]); }
+    else if (!ans.ok && opt) {
+      const t = opt.tag === 'faser' && q.qty === 'V' ? 'faserV' : opt.tag;
+      if (WHY[t]) why.push(WHY[t] + (/^gelenk[MVN]$/.test(t) && fr.hingeType ? ` Das Symbol im System ist aber ein ${HINGE_NAME[fr.hingeType]} – ${HINGE_RULE[fr.hingeType].split(': ')[1]}` : ''));
+    }
     const steps = [], info = F.rodInfo(fr, sol), nm = supNamesF(fr);
     const rods = fr.members.map((m, i) => i).filter((i) => fr.members[i].truss);
     if (rods.length) {
@@ -830,7 +833,13 @@
     }
     const rl = sol.R.map((r, k) => {
       const sp = fr.sup[k];
-      if (sp.type === 'los') return `${nm[k]} = ${fmt(Math.abs(r.R))} kN ${Math.abs((sp.ang ?? 90) - 90) < 1 || Math.abs((sp.ang ?? 90) - 270) < 1 ? (r.Ry >= 0 ? 'nach oben' : 'nach unten') : (r.Rx >= 0 ? 'nach rechts' : 'nach links')}`;
+      if (sp.type === 'los') {
+        const a = ((sp.ang ?? 90) % 180 + 180) % 180, vert = Math.abs(a - 90) < 1, hor = a < 1 || a > 179;
+        const dv = r.Ry >= 0 ? 'oben' : 'unten', dh = r.Rx >= 0 ? 'rechts' : 'links';
+        const dir = vert ? `nach ${dv}` : hor ? `nach ${dh}` : `schräg nach ${dh} ${dv} (unter ${fmt(Math.min(a, 180 - a), 0)}° zur Waagerechten)`;
+        if (Math.abs(r.R) < 0.05) return `${nm[k]} = 0 (dieses Lager bekommt keine Kraft)`;
+        return `${nm[k]} = ${fmt(Math.abs(r.R))} kN ${dir}`;
+      }
       const parts = [];
       if (sp.type !== 'gleit' || Math.abs(r.Rx) > 1e-9) parts.push(`${nm[k]}_h = ${fmt(r.Rx)} kN`);
       if (sp.type !== 'gleit') parts.push(`${nm[k]}_v = ${fmt(r.Ry)} kN`);
@@ -866,21 +875,24 @@
     return { why, sections: [{ title: 'So kommst du drauf', lines: steps }, { title: 'Ergebnis', lines: res }, { title: 'Merke', lines: merke }] };
   }
 
+  // Tipps mit Bedingung (Merkmale des Systems), damit nur Passendes kommt
   const TIPS = [
-    'Erst Pendelstäbe suchen: beidseitig gelenkig, keine Last dazwischen – sie tragen nur Normalkraft.',
-    'Knoten ohne Last mit zwei Stäben, die nicht auf einer Linie liegen: beide sind Nullstäbe.',
-    'Knoten ohne Last mit drei Stäben, zwei davon auf einer Linie: der dritte ist ein Nullstab.',
-    'An einer biegesteifen Ecke mit zwei Stäben ist M auf beiden Seiten gleich – innen bleibt innen.',
-    'An jedem Gelenk ist M = 0. Schneide dort, um die fehlende Gleichung zu bekommen.',
-    'Ein unbelasteter Teil zwischen Gelenk und Lager bleibt oft ganz ohne Moment.',
-    'Die Kraft eines Pendelstabs wirkt in Stabrichtung: Das legt die Wirkungslinie der Auflagerkraft fest.',
-    'An der Ecke wird die Querkraft des einen Stabs zur Normalkraft des anderen.',
-    'Momentengelenk: M = 0. Querkraftgelenk: V = 0. Normalkraftgelenk: N = 0.',
-    'Ein Querkraftgelenk überträgt N und M – das Moment läuft dort ohne Knick weiter.'
+    ['Erst Pendelstäbe suchen: beidseitig gelenkig, keine Last dazwischen – sie tragen nur Normalkraft.', (f) => f.nt > 0],
+    ['Knoten ohne Last mit zwei Stäben, die nicht auf einer Linie liegen: beide sind Nullstäbe.', (f) => f.zeroRods > 0],
+    ['Knoten ohne Last mit drei Stäben, zwei davon auf einer Linie: der dritte ist ein Nullstab.', (f) => f.zeroRods > 0],
+    ['An einer biegesteifen Ecke mit zwei Stäben ist M auf beiden Seiten gleich – innen bleibt innen.', (f) => f.corners > 0],
+    ['An jedem Gelenk ist M = 0. Schneide dort, um die fehlende Gleichung zu bekommen.', (f) => f.hinges > 0],
+    ['Ein unbelasteter Teil zwischen Gelenk und Lager bleibt oft ganz ohne Moment.', (f) => f.hinges > 0],
+    ['Die Kraft eines Pendelstabs wirkt in Stabrichtung: Das legt die Wirkungslinie der Auflagerkraft fest.', (f) => f.nt > 0],
+    ['An der Ecke wird die Querkraft des einen Stabs zur Normalkraft des anderen.', (f) => f.corners > 0],
+    ['Verläufe werden je Stab zur gestrichelten Faser angetragen.', () => true]
   ];
   const HTIPS = ['Momentengelenk: M = 0. Querkraftgelenk: V = 0. Normalkraftgelenk: N = 0.', 'Ein Querkraftgelenk überträgt N und M – das Moment läuft dort ohne Knick weiter.', 'Ein Normalkraftgelenk (Hülse) lässt den Stab in Längsrichtung gleiten: N = 0, V und M laufen durch.', 'Jedes Gelenk gibt genau eine Schnittgröße frei – die ist dort null.'];
   const tip = (q) => {
-    return pick(q && q.type && q.type.startsWith('hinge') ? HTIPS : TIPS);
+    if (q && q.type && q.type.startsWith('hinge')) return pick(HTIPS);
+    let f = null;
+    try { f = features(q.fr, q.fsol); } catch (e) { f = null; }
+    return pick(TIPS.filter(([, ok]) => !f || ok(f)).map(([t]) => t));
   };
 
   // Spickzettel: dasselbe System mit den drei Gelenkarten

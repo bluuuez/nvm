@@ -142,7 +142,7 @@ kbd {
 .system { position: relative; padding: 6px; }
 .system svg { display: block; width: 100%; height: min(30vh, 270px); }
 .system.tappable svg { cursor: crosshair; touch-action: none; }
-.system svg.sv-frame { height: min(48vh, 440px); }
+.system svg.sv-frame { height: auto; max-height: min(52vh, 460px); }
 
 .answers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .answer {

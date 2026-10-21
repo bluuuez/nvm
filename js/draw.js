@@ -558,6 +558,15 @@
         g += line(p0[0], yd, p1[0], yd, 'sv-dim') + dimTick(p0[0], yd) + dimTick(p1[0], yd);
         lab.box(p0[0], yd - 24, p1[0], yd + 4);
         front += text((p0[0] + p1[0]) / 2, yd - 7, 'l', 'sv-dim-sym', 18);
+        // Stablänge s parallel zum Stab (unterhalb), damit Formeln mit s eindeutig sind
+        let ox = -bu[1], oy = bu[0];
+        if (oy < 0) { ox = -ox; oy = -oy; }            // Normale nach unten
+        const off = 30, a0 = [p0[0] + ox * off, p0[1] + oy * off], a1 = [p1[0] + ox * off, p1[1] + oy * off];
+        const ins = 0.22;   // nicht bis in die Lager zeichnen
+        const b0 = [a0[0] + (a1[0] - a0[0]) * ins, a0[1] + (a1[1] - a0[1]) * ins], b1 = [a0[0] + (a1[0] - a0[0]) * (1 - ins), a0[1] + (a1[1] - a0[1]) * (1 - ins)];
+        g += line(b0[0], b0[1], b1[0], b1[1], 'sv-dim', 'stroke-dasharray="4 3"');
+        front += text((b0[0] + b1[0]) / 2 + ox * 14, (b0[1] + b1[1]) / 2 + oy * 14 + 6, 's', 'sv-dim-sym', 18);
+        lab.box((b0[0] + b1[0]) / 2 + ox * 14 - 8, (b0[1] + b1[1]) / 2 + oy * 14 - 12, (b0[0] + b1[0]) / 2 + ox * 14 + 8, (b0[1] + b1[1]) / 2 + oy * 14 + 8);
       } else {
         const kp = critPts(sys);
         g += line(p0[0], yd, p1[0], yd, 'sv-dim');

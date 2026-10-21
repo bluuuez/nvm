@@ -239,7 +239,10 @@
         ? (touch ? 'Tippe im System auf die gesuchte Stelle.' : 'Fahre über das System und klicke auf die gesuchte Stelle.')
         : (touch ? 'Tippe auf die richtige Antwort.' : 'Antwort anklicken oder Taste 1 bis 4.');
     }
-    if (q.type.startsWith('sysFrom')) {
+    if (q.type === 'hingeSys') {
+      $('systemBox').innerHTML = DF.diagram(q.fr, q.fsol, q.qty, { cv: q.fcv, W: isNarrow() ? 520 : 800 });
+      S.map = null;
+    } else if (q.type.startsWith('sysFrom')) {
       const W = isNarrow() ? 520 : 800, H = isNarrow() ? 260 : 290;
       $('systemBox').innerHTML = D.diagram(q.cv.xs.map((x) => x * ca()), q.cv[q.qty], q.qty, Lp(), { W, H });
       S.map = null;
@@ -258,15 +261,6 @@
 
   function renderSystem(withSol) {
     const q = S.q;
-    if (q.type === 'hingeType' && !withSol) {
-      // System mit Fragezeichen, darunter die drei Verläufe mit derselben Markierung
-      let h = DF.system(q.frDisp, { mode: 'full', narrow: isNarrow(), mark: q.mark }).svg + '<div class="hinge-strips">';
-      for (const Q of ['N', 'V', 'M']) h += DF.diagram(q.fr, q.fsol, Q, { compact: true, cv: q.fcv, mark: q.mark, label: true });
-      $('systemBox').innerHTML = h + '</div>';
-      $('systemBox').classList.remove('tappable');
-      S.map = null;
-      return;
-    }
     if (q.frame) {
       $('systemBox').innerHTML = DF.system(q.fr, { mode: 'full', narrow: isNarrow() }).svg;
       $('systemBox').classList.remove('tappable');
@@ -289,13 +283,13 @@
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'answer';
-      const graphic = q.type.startsWith('diag') || q.type.startsWith('sysFrom') || (!!q.frame && q.type !== 'hingeType');
+      const graphic = q.type.startsWith('diag') || q.type.startsWith('sysFrom') || !!q.frame;
       if (graphic) b.setAttribute('aria-label', `Antwort ${k + 1}`);
       let inner = `<span class="num" aria-hidden="true">${k + 1}</span>`;
-      if (q.frame && q.type !== 'hingeType') inner += DF.diagram(o.fr || q.fr, null, q.qty, { compact: true, cv: o.cv });
+      if (q.type === 'hingeSys') inner += DF.system(o.fr, { mode: 'compact', Hmin: 150 }).svg;
+      else if (q.frame) inner += DF.diagram(o.fr || q.fr, null, q.qty, { compact: true, cv: o.cv });
       else if (q.type.startsWith('diag')) inner += D.diagram(o.xs.map((x) => x * ca()), o.f, q.qty, Lp(), { compact: true });
       else if (q.type.startsWith('sysFrom')) inner += D.system(o.sys, { mode: 'compact', symbolic: true }).svg;
-      else if (q.type === 'hingeType') inner += `<span class="val val-word">${esc(o.label)}</span>`;
       else inner += `<span class="val">${tex(o.label)}</span>`;   // KaTeX liefert MathML für Bildschirmleser mit
       if (fb) {
         b.disabled = true;

@@ -1048,7 +1048,7 @@
     // Gelenke erkennen: ab Stufe 3, bei Gerberträgern und Stabwerken
     if (task === 'gelenk') {
       if (level < 3 || !['gerber', 'rahmen', 'alle'].includes(kind) || qty === 'wert') return [];
-      return ['hingeType', 'hingeType', 'hingeDiag'];
+      return ['hingeDiag', 'hingeDiag', 'hingeSys'];
     }
     // Rahmen und Stabwerke: nur Verläufe, ab Stufe 4
     if (kind === 'rahmen') {
@@ -1084,7 +1084,7 @@
       const nF = level === 4 ? 3 : level === 5 ? 5 : 7;
       const fq = qty === 'M' || qty === 'V' || qty === 'N' ? ['frame' + qty] : ['frameM', 'frameM', 'frameV', 'frameN'];
       for (let i = 0; i < nF; i++) f.push(fq[i % fq.length]);
-      if (level >= 5 && (!task || task === 'mix')) f.push('hingeType', 'hingeType', 'hingeDiag');
+      if (level >= 5 && (!task || task === 'mix')) f.push('hingeDiag', 'hingeSys');
     }
     if (task && task !== 'mix' && TASKS[task]) return f;      // gezielt: lieber leer als etwas anderes
     return f.length ? f : ts;
@@ -1190,8 +1190,8 @@
       if (attempt >= 60) forceType = '';
       if (attempt >= 150) task = 'mix';
       let typ = forceType || pickType(level, qty, task, kind);
-      if (typ === 'hingeType' || typ === 'hingeDiag') {
-        const hq = root.NVM.framegen && root.NVM.framegen.buildHingeQuestion(level, typ === 'hingeType' ? 'type' : 'diag', qty);
+      if (typ === 'hingeDiag' || typ === 'hingeSys') {
+        const hq = root.NVM.framegen && root.NVM.framegen.buildHingeQuestion(level, typ === 'hingeSys' ? 'sys' : 'diag', qty);
         if (hq) return hq;
         continue;
       }

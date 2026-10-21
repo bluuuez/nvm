@@ -282,12 +282,12 @@
       if (o === 0 && up < 0 && fr.sup[fr.sup.length - 1].type === 'los') fr.sup[fr.sup.length - 1].ang = 0;
       return fr;
     },
-    gelenk(type) {
+    gelenk(type, simple) {
       // Träger mit Momenten-, Querkraft- oder Normalkraftgelenk (Sammlung, System 8 und 12)
       const t = type || pick(['M', 'V', 'N']);
       const L = pick([4, 5, 6, 8]), xg = randi(Math.max(1, Math.round(L * 0.3)), Math.min(L - 1, Math.round(L * 0.7)));
-      const v = pick(['balken', 'balken', 'ast']);
-      const fr = mk(t === 'M' ? 'Träger mit Momentengelenk' : t === 'V' ? 'Träger mit Querkraftgelenk' : 'Träger mit Normalkraftgelenk', 'gelenk');
+      const v = simple ? 'balken' : pick(['balken', 'balken', 'ast']);
+      const fr = mk('Träger mit Gelenk', 'gelenk');       // neutral: die Gelenkart zeigt nur das Symbol
       const a = node(fr, 0, 0), g = node(fr, xg, 0, t === 'M'), b = node(fr, L, 0);
       let rest = b;
       const m1 = beam(fr, a, g);
@@ -630,78 +630,133 @@
   }
 
   // ------------------------------------------------------------ Gelenk-Aufgaben
-  const HINGE_NAME = { M: 'Momentengelenk', V: 'Querkraftgelenk', N: 'Normalkraftgelenk', K: 'Kein Gelenk (biegesteif)' };
+  const HINGE_NAME = { M: 'Momentengelenk', V: 'Querkraftgelenk', N: 'Normalkraftgelenk' };
   const HINGE_RULE = {
     M: 'Momentengelenk (Kreis): M = 0, N und V werden übertragen.',
     V: 'Querkraftgelenk (zwei Querstriche): V = 0, N und M werden übertragen. Ohne Last direkt daneben hat M dort eine waagerechte Tangente.',
     N: 'Normalkraftgelenk (Hülse): N = 0, V und M werden übertragen.'
   };
-  // Schnittgrößen direkt am Gelenk (am Stab, der dort endet bzw. beginnt)
-  function atHinge(fr, sol) {
-    const j = fr.hingeAt;
-    const i = fr.members.findIndex((m) => m.b === j && !m.truss);
-    if (i >= 0) return F.at(sol, i, sol.mem[i].l, -1);
-    const k = fr.members.findIndex((m) => m.a === j && !m.truss);
-    return F.at(sol, k, 0, 1);
+  // Funktion entlang des geraden Trägers (für Vergleiche über verschiedene Stabteilungen hinweg)
+  function beamVec(fr, sol, qty) {
+    const xs = fr.nodes.map((n) => n.x), x0 = Math.min(...xs), x1 = Math.max(...xs), out = [];
+    for (let k = 0; k <= 60; k++) {
+      const x = x0 + (x1 - x0) * (0.004 + 0.992 * k / 60);
+      const i = fr.members.findIndex((m) => { const a = fr.nodes[m.a].x, b = fr.nodes[m.b].x; return x >= Math.min(a, b) && x <= Math.max(a, b) && Math.abs(fr.nodes[m.a].y - fr.nodes[m.b].y) < EPS; });
+      if (i < 0) { out.push(0); continue; }
+      out.push(F.at(sol, i, Math.abs(x - fr.nodes[fr.members[i].a].x))[qty]);
+    }
+    return out;
   }
-  function genHinge(stage, type, needAll) {
-    for (let t = 0; t < 60; t++) {
-      const fr = FAM.gelenk(type);
+  // einfacher Träger mit einem Gelenk, bei dem alle drei Gelenkarten statisch bestimmt sind
+  function genHinge(stage, type) {
+    for (let t = 0; t < 80; t++) {
+      const fr = FAM.gelenk(type, true);
       if (rnd() < 0.5) mirror(fr);
-      if (crossing(fr)) continue;
       orient(fr);
-      const used = [];
-      // eine schräge Kraft sorgt dafür, dass N, V und M am Gelenk nicht zufällig null sind
-      if (needAll) addLoad(fr, ['Fs'], used);
-      const nl = stage <= 3 ? 1 : stage <= 5 ? randi(1, 2) : 2;
-      while (fr.loads.length < nl + (needAll ? 1 : 0) - (needAll && nl > 1 ? 1 : 0)) if (!addLoad(fr, ['F', 'F', 'q', 'Fs', 'M'], used)) break;
+      const used = [], nl = stage <= 5 ? 1 : randi(1, 2);
+      for (let k = 0; k < nl; k++) addLoad(fr, ['F', 'F', 'q', 'Fs', 'M'], used);
       if (!fr.loads.length) continue;
       const sol = F.solve(fr);
       if (!sol.ok) continue;
       const cv = F.curves(fr, sol, 40);
       if (!sane(cv)) continue;
-      if (needAll) {
-        const h = atHinge(fr, sol), mx = (Q) => Math.max(...cv.map((c) => maxAbs(c[Q])));
-        const big = (Q) => Math.abs(h[Q]) > Math.max(0.6, 0.1 * mx(Q));
-        const others = ['N', 'V', 'M'].filter((Q) => Q !== fr.hingeType);
-        if (!others.every(big)) continue;
+      const vars = {};
+      let ok = true;
+      for (const h of ['M', 'V', 'N']) {
+        if (h === fr.hingeType) { vars[h] = { fr, sol, cv }; continue; }
+        const f2 = setHinge(clone(fr), h), s2 = F.solve(f2);
+        if (!s2.ok) { ok = false; break; }
+        const c2 = F.curves(f2, s2, 40);
+        if (!sane(c2)) { ok = false; break; }
+        vars[h] = { fr: f2, sol: s2, cv: c2 };
       }
+      if (!ok) continue;
       const d = difficulty(fr, sol); fr.D = d.D;
-      return { fr, sol, cv, d };
+      return { fr, sol, cv, d, vars };
+    }
+    return null;
+  }
+  // Größe, in der sich die drei Gelenkarten deutlich unterscheiden
+  function hingeQty(g, want) {
+    const qs = want && want !== 'mix' ? [want] : ['M', 'M', 'V', 'N'].sort(() => rnd() - 0.5);
+    for (const q of qs) {
+      const v = ['M', 'V', 'N'].map((h) => norm(beamVec(g.vars[h].fr, g.vars[h].sol, q)));
+      if (v.some((x) => !x)) continue;
+      if (rms(v[0], v[1]) > 0.12 && rms(v[0], v[2]) > 0.12 && rms(v[1], v[2]) > 0.12) return q;
     }
     return null;
   }
   function buildHingeQuestion(stage, kind, qtyWant) {
-    for (let t = 0; t < 30; t++) {
-      if (kind === 'diag') {
-        const g = genHinge(stage, null, false);
-        if (!g) continue;
-        const qty = qtyWant && qtyWant !== 'mix' ? qtyWant : pick(['M', 'M', 'V', 'N']);
-        if (Math.max(...g.cv.map((c) => maxAbs(c[qty]))) < 1e-6) continue;
-        const r = frameOptions(g.fr, g.sol, g.cv, qty);
-        if (!r) continue;
-        return {
-          type: 'hingeDiag', frame: true, fr: g.fr, fsol: g.sol, fcv: g.cv, qty, diff: g.d,
-          sys: { L: 1, ca: 1, sa: 0, alpha: 0, kind: 'frame', name: g.fr.name, loads: [], sup: [], hinges: [] },
-          text: QTY_TEXT[qty], opts: r.opts, correct: r.correct, target: [], tol: 0, clickTag: '', solLines: [`Richtig ist Antwort ${r.correct + 1}.`], symbolic: false
-        };
-      }
-      const g = genHinge(stage, null, true);
+    const base = (g) => ({ sys: { L: 1, ca: 1, sa: 0, alpha: 0, kind: 'frame', name: g.fr.name, loads: [], sup: [], hinges: [] }, target: [], tol: 0, clickTag: '', symbolic: false });
+    const type = pick(['M', 'V', 'N']);                 // Gelenkart gleich verteilt
+    for (let t = 0; t < (kind === 'sys' ? 90 : 40); t++) {
+      const g = genHinge(stage, type);
       if (!g) continue;
-      const disp = setHinge(clone(g.fr), 'K');
-      disp.name = 'Träger';
-      const h = atHinge(g.fr, g.sol);
-      const all = ['M', 'V', 'N', 'K'].map((k) => ({ tag: k === g.fr.hingeType ? 'richtig' : 'gelenk' + k, label: HINGE_NAME[k], hinge: k }));
-      const perm = [0, 1, 2, 3].sort(() => rnd() - 0.5), opts = perm.map((i) => all[i]);
-      const correct = opts.findIndex((o) => o.tag === 'richtig');
-      return {
-        type: 'hingeType', frame: true, fr: g.fr, frDisp: disp, mark: { n: g.fr.hingeAt }, fsol: g.sol, fcv: g.cv, qty: 'M', diff: g.d, hingeVals: h,
-        sys: { L: 1, ca: 1, sa: 0, alpha: 0, kind: 'frame', name: 'Gelenk erkennen', loads: [], sup: [], hinges: [] },
-        text: 'Welches Gelenk sitzt an der markierten Stelle? Die Verläufe darunter gehören zum System.',
-        opts, correct, target: [], tol: 0, clickTag: '', solLines: [`Richtig: ${HINGE_NAME[g.fr.hingeType]}.`], symbolic: false
-      };
+      const qty = hingeQty(g, qtyWant);
+      if (!qty) continue;
+      if (kind === 'diag') {
+        // richtige Antwort, die beiden anderen Gelenkarten und ein weiterer Denkfehler
+        const r = frameOptions(g.fr, g.sol, g.cv, qty);
+        if (!r || r.opts.filter((o) => /^gelenk/.test(o.tag)).length < 2) continue;
+        return Object.assign(base(g), {
+          type: 'hingeDiag', frame: true, fr: g.fr, fsol: g.sol, fcv: g.cv, qty, diff: g.d,
+          text: QTY_TEXT[qty], opts: r.opts, correct: r.correct, solLines: [`Richtig ist Antwort ${r.correct + 1}: ${HINGE_NAME[g.fr.hingeType]}.`]
+        });
+      }
+      // System zum Verlauf: dieselbe Lagerung mit den drei Gelenkarten, dazu das richtige Gelenk an anderer Stelle
+      const opts = ['M', 'V', 'N'].map((h) => ({ fr: g.vars[h].fr, sol: g.vars[h].sol, tag: h === g.fr.hingeType ? 'richtig' : 'gelenk' + h }));
+      const L = Math.max(...g.fr.nodes.map((n) => n.x)), xg = g.fr.nodes[g.fr.hingeAt].x;
+      const cand = [];
+      for (let x = 1; x < L; x++) if (Math.abs(x - xg) >= 2 && !g.fr.loads.some((l) => l.n !== undefined && Math.abs(g.fr.nodes[l.n].x - x) < EPS)) cand.push(x);
+      const vs = opts.map((o) => norm(beamVec(o.fr, o.sol, qty)));
+      if (vs.some((v) => !v)) continue;
+      // verschobenes Gelenk: muss einen anderen Verlauf ergeben (in einem unbelasteten Bereich ändert sich oft nichts)
+      let moved = null;
+      for (const x of cand.sort(() => rnd() - 0.5)) {
+        const f2 = moveHinge(g.fr, x);
+        if (!f2) continue;
+        const s2 = F.solve(f2);
+        if (!s2.ok || !sane(F.curves(f2, s2, 20))) continue;
+        const v = norm(beamVec(f2, s2, qty));
+        if (v && vs.every((w) => rms(v, w) >= 0.12)) { moved = { fr: f2, sol: s2, tag: 'gelenkOrt' }; vs.push(v); break; }
+      }
+      if (!moved) continue;
+      opts.push(moved);
+      const perm = [0, 1, 2, 3].sort(() => rnd() - 0.5), po = perm.map((i) => opts[i]);
+      const correct = po.findIndex((o) => o.tag === 'richtig');
+      return Object.assign(base(g), {
+        type: 'hingeSys', frame: true, fr: g.fr, fsol: g.sol, fcv: g.cv, qty, diff: g.d,
+        text: `Hier siehst du einen ${{ M: 'Momentenverlauf', V: 'Querkraftverlauf', N: 'Normalkraftverlauf' }[qty]}. Zu welchem System gehört er?`,
+        opts: po, correct, solLines: [`Richtig ist System ${correct + 1}: ${HINGE_NAME[g.fr.hingeType]}.`]
+      });
     }
     return null;
+  }
+  // dasselbe System, Gelenk an anderer Stelle des geraden Trägers (Lasten bleiben, wo sie sind)
+  function moveHinge(fr0, x) {
+    const L = Math.max(...fr0.nodes.map((n) => n.x));
+    const f = mk(fr0.name, 'gelenk');
+    const pts = [...new Set([0, L, x, ...fr0.nodes.filter((n) => Math.abs(n.y) < EPS).map((n) => n.x)].filter((v) => Math.abs(v - fr0.nodes[fr0.hingeAt].x) > EPS || v === x))].sort((p, q) => p - q);
+    const ids = pts.map((v) => node(f, v, 0, fr0.hingeType === 'M' && v === x));
+    for (let i = 0; i < ids.length - 1; i++) beam(f, ids[i], ids[i + 1]);
+    f.hingeAt = node(f, x, 0); f.hingeType = fr0.hingeType;
+    if (fr0.hingeType !== 'M') { const m = f.members.find((mm) => mm.b === f.hingeAt); m[(fr0.hingeType === 'V' ? 'relV' : 'relN') + 'B'] = true; }
+    for (const sp of fr0.sup) { const n = fr0.nodes[sp.n]; const o = Object.assign({}, sp, { n: node(f, n.x, n.y) }); f.sup.push(o); }
+    // Lasten über globale Lage neu zuordnen
+    for (const ld of fr0.loads) {
+      if (ld.type === 'q') return null;                        // Streckenlast über das Gelenk hinweg: lieber weglassen
+      const px = ld.n !== undefined ? fr0.nodes[ld.n].x : fr0.nodes[fr0.members[ld.m].a].x + F.geom(fr0, ld.m).e[0] * ld.s;
+      const j = f.nodes.findIndex((n) => Math.abs(n.x - px) < EPS && Math.abs(n.y) < EPS);
+      const o = Object.assign({}, ld); delete o.m; delete o.s; delete o.n;
+      if (j >= 0 && !(ld.type === 'M' && j === f.hingeAt)) o.n = j;
+      else {
+        const i = f.members.findIndex((m) => f.nodes[m.a].x < px - EPS && f.nodes[m.b].x > px + EPS);
+        if (i < 0) return null;
+        o.m = i; o.s = px - f.nodes[f.members[i].a].x;
+      }
+      f.loads.push(o);
+    }
+    return f;
   }
 
   // ------------------------------------------------------------ Erklärung
@@ -752,27 +807,17 @@
     pendelRichtung: 'Die Kraft eines Pendelstabs wirkt immer in Stabrichtung. Hier wurde sie mit einer anderen Richtung gerechnet.',
     gelenkM: 'Hier wurde das Gelenk als Momentengelenk gerechnet (M = 0). Das Symbol zeigt aber ein anderes Gelenk.',
     gelenkV: 'Hier wurde das Gelenk als Querkraftgelenk gerechnet (V = 0). Das Symbol zeigt aber ein anderes Gelenk.',
-    gelenkN: 'Hier wurde das Gelenk als Normalkraftgelenk gerechnet (N = 0). Das Symbol zeigt aber ein anderes Gelenk.'
+    gelenkN: 'Hier wurde das Gelenk als Normalkraftgelenk gerechnet (N = 0). Das Symbol zeigt aber ein anderes Gelenk.',
+    gelenkOrt: 'Das Gelenk sitzt in diesem System an einer anderen Stelle – dort müsste die freigegebene Schnittgröße null sein.'
   };
-  function hingeFeedback(q, ans) {
-    const fr = q.fr, h = q.hingeVals, t = fr.hingeType, why = [];
-    const opt = ans.chosen >= 0 ? q.opts[ans.chosen] : null;
-    const val = (Q) => `${Q} = ${fmt(h[Q])} ${Q === 'M' ? 'kNm' : 'kN'}`;
-    if (!ans.ok && ans.tag === 'zeit') why.push('Die Zeit ist abgelaufen.');
-    else if (!ans.ok && opt) {
-      const k = opt.hinge;
-      if (k === 'K') why.push(`Ein biegesteifer Stoß überträgt alles. Hier ist aber ${t} = 0 an der markierten Stelle – dort sitzt ein Gelenk.`);
-      else why.push(`Ein ${HINGE_NAME[k]} hätte an der Stelle ${k} = 0. Hier ist aber ${val(k)}.`);
-      why.push(`Null ist an der Stelle nur ${t} – das passt zum ${HINGE_NAME[t]}.`);
-    }
-    const lines = [`An der markierten Stelle: ${val('N')}, ${val('V')}, ${val('M')}.`, `Null ist nur ${t}: also ${HINGE_NAME[t]}.`];
-    return { why, sections: [{ title: 'So kommst du drauf', lines }, { title: 'Gelenkarten', lines: [HINGE_RULE.M, HINGE_RULE.V, HINGE_RULE.N] }] };
-  }
   function feedback(q, ans) {
-    if (q.type === 'hingeType') return hingeFeedback(q, ans);
     const fr = q.fr, sol = q.fsol, cv = q.fcv, why = [];
     const opt = ans.chosen >= 0 && q.opts ? q.opts[ans.chosen] : null;
     if (!ans.ok && ans.tag === 'zeit') why.push('Die Zeit ist abgelaufen. Unten steht, wie man schnell auf die Lösung kommt.');
+    else if (!ans.ok && opt && q.type === 'hingeSys' && /^gelenk[MVN]$/.test(opt.tag)) {
+      const h = opt.tag[6];
+      why.push(`System ${ans.chosen + 1} hat ein ${HINGE_NAME[h]}: dort wäre ${h} = 0. ${HINGE_RULE[h]} Der gezeigte Verlauf passt nur zum ${HINGE_NAME[fr.hingeType]}.`);
+    }
     else if (!ans.ok && opt) { const t = opt.tag === 'faser' && q.qty === 'V' ? 'faserV' : opt.tag; if (WHY[t]) why.push(WHY[t]); }
     const steps = [], info = F.rodInfo(fr, sol), nm = supNamesF(fr);
     const rods = fr.members.map((m, i) => i).filter((i) => fr.members[i].truss);
@@ -817,6 +862,7 @@
       V: ['V ist die Steigung von M: wo M konstant ist, ist V = 0.', 'In Pendelstäben ist V = 0.'],
       N: ['N ändert sich nur durch Lasten in Stabrichtung. Pendelstäbe haben konstantes N.', 'Nullstäbe zuerst suchen: Sie vereinfachen das Gleichgewicht an den Knoten.']
     }[q.qty];
+    if (fr.hingeType) merke.splice(0, merke.length, HINGE_RULE.M, HINGE_RULE.V, HINGE_RULE.N);
     return { why, sections: [{ title: 'So kommst du drauf', lines: steps }, { title: 'Ergebnis', lines: res }, { title: 'Merke', lines: merke }] };
   }
 
@@ -834,8 +880,7 @@
   ];
   const HTIPS = ['Momentengelenk: M = 0. Querkraftgelenk: V = 0. Normalkraftgelenk: N = 0.', 'Ein Querkraftgelenk überträgt N und M – das Moment läuft dort ohne Knick weiter.', 'Ein Normalkraftgelenk (Hülse) lässt den Stab in Längsrichtung gleiten: N = 0, V und M laufen durch.', 'Jedes Gelenk gibt genau eine Schnittgröße frei – die ist dort null.'];
   const tip = (q) => {
-    if (q && q.type === 'hingeType') return 'Schau an der markierten Stelle in alle drei Verläufe: Welche Schnittgröße ist dort null?';
-    return pick(q && q.type === 'hingeDiag' ? HTIPS : TIPS);
+    return pick(q && q.type && q.type.startsWith('hinge') ? HTIPS : TIPS);
   };
 
   // Spickzettel: dasselbe System mit den drei Gelenkarten

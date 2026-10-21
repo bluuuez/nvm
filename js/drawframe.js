@@ -260,13 +260,6 @@
     return g;
   }
 
-  // Fragezeichen an einer Stelle (Gelenk erkennen)
-  function markSvg(fr, L, mk, compact) {
-    const n = fr.nodes[mk.n], p = L.P(n.x, n.y), r = compact ? 9 : 12;
-    return `<circle cx="${r1(p[0])}" cy="${r1(p[1])}" r="${r}" class="sv-mark"/>` +
-      `<text x="${r1(p[0])}" y="${r1(p[1] + r * 0.45)}" text-anchor="middle" font-size="${r * 1.35}" class="sv-mark-text">?</text>`;
-  }
-
   // ------------------------------------------------------------ System
   function system(fr, opts = {}) {
     const compact = opts.mode === 'compact', narrow = !compact && !!opts.narrow;
@@ -281,7 +274,6 @@
     g += supportsSvg(fr, L, compact, lab);
     g += hingeMarks(fr, L, compact);
     g += releaseMarks(fr, L, compact);
-    if (opts.mark) g += markSvg(fr, L, opts.mark, compact);
     if (!compact) {
       g += dimsSvg(fr, L, W, H, fs);
       lab.box(0, H - 36, W, H);
@@ -299,11 +291,14 @@
     const cv = opts.cv || F.curves(fr, sol);
     const q = qty.toLowerCase();
     const W = opts.W || (compact ? 400 : 800);
-    const A = compact ? 28 : 52;                        // größter Ausschlag in px
+    let A = compact ? 28 : 52;                          // größter Ausschlag in px
     const pad = compact ? A + 8 : A + 40;
     const m = { l: pad, r: pad, t: pad, b: pad };
     const L = layout(fr, W, opts.Hmin || (compact ? 170 : 260), compact ? 280 : 520, m);
     const H = L.H;
+    // flache Systeme (gerader Träger): den freien Platz für einen größeren Ausschlag nutzen
+    const hs = (L.y1 - L.y0) * L.k;
+    A = Math.max(A, Math.min(compact ? 58 : 80, (H - hs) / 2 - (compact ? 14 : 30)));
     const tum = NVM.draw.plotMode() === 'tum';
     const dir = tum || qty === 'M' ? 1 : -1;
     const smax = Math.max(1e-12, ...cv.map((c) => Math.max(...c[qty].map(Math.abs))));
@@ -386,7 +381,6 @@
       }
       front += text(W - 8, 16, qty === 'M' ? 'kNm' : 'kN', 'sv-unit', 12, 'end');
     }
-    if (opts.mark) front += markSvg(fr, L, opts.mark, compact);
     if (!compact || opts.label) front += text(compact ? 10 : 18, compact ? 22 : 30, qty, `sv-qty sv-c-${q}`, compact ? 18 : 24, 'start');
     front += lab.resolve();
     return `<svg viewBox="0 0 ${W} ${r1(H)}" class="sv sv-diagram sv-frame">${g}${front}</svg>`;

@@ -327,7 +327,15 @@
     cv.forEach((c, i) => {
       const s = scr(fr, i, L), f = c[qty];
       const pt = (k, v) => { const p = s.at(c.s[k]); const o = dir * v / smax * A; return [p[0] + s.z[0] * o, p[1] + s.z[1] * o]; };
-      if (Math.max(...f.map(Math.abs)) < 1e-9 * smax) return;
+      if (Math.max(...f.map(Math.abs)) < 1e-9 * smax) {
+        // Stab ohne Wert: als Strich auf der Achse, wenn er einen geraden Träger mit einem belasteten Nachbarstab fortsetzt
+        // (wie beim Einfeldträger: „hier null“ ist dann Teil des Verlaufs)
+        const m = fr.members[i], e = F.geom(fr, i).e;
+        const inLine = fr.members.some((mm, j) => j !== i && [mm.a, mm.b].some((n) => n === m.a || n === m.b) &&
+          Math.abs(Math.abs(F.geom(fr, j).e[0] * e[0] + F.geom(fr, j).e[1] * e[1]) - 1) < 1e-3 && Math.max(...cv[j][qty].map(Math.abs)) >= 1e-9 * smax);
+        if (inLine) g += `<path d="${pathD([s.A, s.B])}" class="sv-curve sv-c-${q}${opts.animate ? ' sv-draw' : ''}" pathLength="1"/>`;
+        return;
+      }
       // Flächen getrennt nach Vorzeichen (Linienzüge vereinfacht, siehe draw.js)
       for (const sg of [1, -1]) {
         const pts = [s.at(c.s[0])];
@@ -347,7 +355,18 @@
       }
       if (hp) g += `<path d="${hp}" class="sv-hatchline sv-c-${q}"/>`;
       const curve = simplify(c.s.map((sv, k) => pt(k, f[k])));
-      g += `<path d="${pathD([s.A, ...curve, s.B])}" class="sv-curve sv-c-${q}${opts.animate ? ' sv-draw' : ''}" pathLength="1"/>`;
+      // Läuft der Verlauf an einem Knoten ohne Sprung in einen gleich gerichteten Nachbarstab weiter (gerader Träger mit Gelenk),
+      // dort nicht auf die Achse zurückzeichnen: der Strich sähe wie ein Sprung aus und verriete die Stabteilung
+      const goesOn = (end) => {
+        const m = fr.members[i], j0 = end === 'A' ? m.a : m.b, v = end === 'A' ? f[0] : f[f.length - 1], e = F.geom(fr, i).e;
+        return fr.members.some((mm, j) => {
+          if (j === i || (mm.a !== j0 && mm.b !== j0)) return false;
+          const ej = F.geom(fr, j).e, cj = cv[j][qty];
+          if (ej[0] * e[0] + ej[1] * e[1] < 0.999) return false;
+          return Math.abs((mm.a === j0 ? cj[0] : cj[cj.length - 1]) - v) < 1e-3 * smax;
+        });
+      };
+      g += `<path d="${pathD([...(goesOn('A') ? [] : [s.A]), ...curve, ...(goesOn('B') ? [] : [s.B])])}" class="sv-curve sv-c-${q}${opts.animate ? ' sv-draw' : ''}" pathLength="1"/>`;
       for (let k = 1; k < curve.length; k++) lab.seg(curve[k - 1][0], curve[k - 1][1], curve[k][0], curve[k][1]);
 
       // Vorzeichen

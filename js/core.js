@@ -1045,6 +1045,11 @@
   // Liefert die möglichen Typen; leer heißt: Kombination gibt es nicht
   function typePool(level, qty, task, kind) {
     let ts;
+    // Rahmen und Stabwerke: nur Verläufe, ab Stufe 4
+    if (kind === 'rahmen') {
+      if (level < 4 || (task && task !== 'mix' && task !== 'verlauf') || qty === 'wert') return [];
+      return qty === 'M' || qty === 'V' || qty === 'N' ? ['frame' + qty] : ['frameM', 'frameV', 'frameN'];
+    }
     if (task && task !== 'mix' && TASKS[task]) {
       const t = TASKS[task];
       ts = qty === 'M' || qty === 'V' || qty === 'N' ? t[qty].slice() : [...t.M, ...t.V, ...t.N];
@@ -1068,7 +1073,13 @@
     const drop = [];
     if (kind === 'krag') drop.push('clickV0', 'clickM0');
     if (kind === 'eft') drop.push('clickM0');
-    const f = ts.filter((t) => !drop.includes(t));
+    let f = ts.filter((t) => !drop.includes(t));
+    // gemischt (Arcade): ab Stufe 4 kommen Rahmen dazu, mit der Stufe immer häufiger
+    if (kind === 'alle' && level >= 4 && (!task || task === 'mix' || task === 'verlauf') && qty !== 'wert') {
+      const nF = level === 4 ? 3 : level === 5 ? 5 : 7;
+      const fq = qty === 'M' || qty === 'V' || qty === 'N' ? ['frame' + qty] : ['frameM', 'frameM', 'frameV', 'frameN'];
+      for (let i = 0; i < nF; i++) f.push(fq[i % fq.length]);
+    }
     if (task && task !== 'mix' && TASKS[task]) return f;      // gezielt: lieber leer als etwas anderes
     return f.length ? f : ts;
   }
@@ -1078,10 +1089,10 @@
     return pick(ts);
   }
   // Lernmodus mit Mehrfachauswahl: alle passenden Kombinationen aus Schnittgröße, Aufgabe und Tragwerk
-  function learnPool(qtys, tasks, kinds) {
+  function learnPool(qtys, tasks, kinds, level = 1) {
     const pool = [];
     for (const task of tasks) for (const qty of qtys) for (const kind of kinds) {
-      for (const type of new Set(typePool(1, qty, task, kind))) pool.push({ type, qty, task, kind });
+      for (const type of new Set(typePool(kind === 'rahmen' ? level : 1, qty, task, kind))) pool.push({ type, qty, task, kind });
     }
     return pool;
   }
@@ -1093,13 +1104,17 @@
 
   // Was die Stufen am Zufallsgenerator ändern (siehe genSystem)
   const LEVEL_INFO = [
-    { name: 'Einstieg', systems: 'Einfeldträger und Kragarm', loads: 'Genau eine Last: Einzellast oder Gleichstreckenlast über die ganze Länge.' },
-    { name: 'Grundlagen', systems: 'dazu Träger mit Kragarm', loads: 'Eine Last, jetzt auch Teilstreckenlast, Dreieckslast, Einzelmoment oder Linienmoment.' },
-    { name: 'Fortgeschritten', systems: 'dazu Gerberträger', loads: 'Ein bis zwei Lasten, auch schräge und waagerechte Einzelkräfte.' },
-    { name: 'Klausurniveau', systems: 'alle, häufiger mit Kragarm und Gelenk', loads: 'Immer zwei Lasten aller Arten.' },
-    { name: 'Profi', systems: 'alle', loads: 'Zwei bis drei Lasten aller Arten.' }
+    { name: 'Einstieg', short: 'Einfeldträger und Kragarm mit einer Last.', systems: 'Einfeldträger und Kragarm', loads: 'Genau eine Last: Einzellast oder Gleichstreckenlast über die ganze Länge.' },
+    { name: 'Grundlagen', short: 'Neu: Träger mit Kragarm und alle Lastarten.', systems: 'dazu Träger mit Kragarm', loads: 'Eine Last, jetzt auch Teilstreckenlast, Dreieckslast, Einzelmoment oder Linienmoment.' },
+    { name: 'Fortgeschritten', short: 'Neu: Gerberträger, zwei Lasten.', systems: 'dazu Gerberträger', loads: 'Ein bis zwei Lasten, auch schräge und waagerechte Einzelkräfte.' },
+    { name: 'Erste Rahmen', short: 'Neu: Kragwinkel, Knick- und Treppenträger.', systems: 'Träger mit zwei Lasten, dazu Kragwinkel, Knick- und Treppenträger und abgespannte Träger', loads: 'Träger mit zwei Lasten. Neu: kleine Rahmen mit einer Last – Kragwinkel, Knick- und Treppenträger, abgespannte Träger.' },
+    { name: 'Rahmen', short: 'Neu: Rahmen und Gelenkträger auf Pendelstützen.', systems: 'dazu Rahmen, Dreigelenkrahmen und Gelenkträger auf Pendelstützen', loads: 'Träger mit zwei bis drei Lasten. Rahmen, Dreigelenkrahmen und Gelenkträger auf Pendelstützen mit ein bis zwei Lasten.' },
+    { name: 'Pendel- und Nullstäbe', short: 'Pendel- und Nullstäbe erkennen.', systems: 'dazu Fachwerkunterbau, unterspannte Träger und Stäbe auf Pendelstäben', loads: 'Stabwerke, bei denen du Pendel- und Nullstäbe erkennen musst: Fachwerkunterbau, unterspannte Träger, Stäbe auf Pendelstäben.' },
+    { name: 'Klausurniveau', short: 'Größere Stabwerke wie in der Sammlung.', systems: 'dazu Gelenkträger mit Rahmenecke und Giebelrahmen mit Zugband', loads: 'Größere Stabwerke wie in der Schnittgrößensammlung, meist zwei Lasten.' },
+    { name: 'Profi', short: 'Die größten Stabwerke.', systems: 'alle, die größten Systeme', loads: 'Die größten Stabwerke mit zwei bis drei Lasten.' }
   ];
-  const levelInfo = (lv) => LEVEL_INFO[Math.max(1, Math.min(5, lv)) - 1];
+  const levelInfo = (lv) => LEVEL_INFO[Math.max(1, Math.min(LEVEL_INFO.length, lv)) - 1];
+  const MAX_LEVEL = LEVEL_INFO.length;
 
   const isClickType = (t) => ['clickMmax', 'clickVmax', 'clickV0', 'clickM0'].includes(t);
   const isValType = (t) => ['valMax', 'valR'].includes(t);
@@ -1169,6 +1184,12 @@
       if (attempt >= 60) forceType = '';
       if (attempt >= 150) task = 'mix';
       let typ = forceType || pickType(level, qty, task, kind);
+      if (typ.startsWith('frame')) {
+        const fq = root.NVM.framegen && root.NVM.framegen.buildFrameQuestion(Math.max(4, level), typ[5]);
+        if (fq) return fq;
+        continue;
+      }
+      if (kind === 'rahmen') continue;
       let kpref = kind;
       if (typ === 'clickV0' && kind === 'krag') typ = 'diagV';
       if (typ === 'clickM0' && kind === 'alle') kpref = pick(['ueber', 'gerber']);
@@ -1536,6 +1557,7 @@
     { title: 'Randbedingungen', lines: ['Freies Ende ohne Last: N = V = M = 0', 'Gelenkiges Endlager: M = 0', 'Einspannung: M ≠ 0, meist der Extremwert', 'Gelenk im Träger: M = 0', 'Festlager nimmt H auf, Loslager nicht'] },
     { title: 'Schräge Stäbe', lines: ['Lasten zerlegen: quer zur Achse wirken sie auf V und M, längs der Achse auf N.', 'Punktlast F senkrecht: quer F·cos α, längs F·sin α', 'Last je m Grundriss q: quer q·cos²α, längs q·sinα·cosα (je m Stab)', 'Eigengewicht g je m Stab: quer g·cos α, längs g·sin α', 'Senkrechte Lagerkräfte: max M = q·l²/8 mit l = Grundriss', 'Eigenlast, Festlager unten: N am unteren Ende = −A_v·sin α, am oberen Ende = +B_v·sin α', 'Loslager: Lagerkraft ⊥ Gleitebene – sie entscheidet, wo N wirkt.'] },
     { title: 'Standardfälle', lines: ['Einfeldträger, q: A = B = qL/2, max M = qL²/8', 'Einfeldträger, F mittig: max M = FL/4', 'Einfeldträger, F bei a: A = F·b/L, max M = F·a·b/L', 'Einfeldträger, Einzelmoment: |A| = |B| = M₀/L', 'Einfeldträger, Dreieck 0 bis q₀: A = q₀L/6, B = q₀L/3, max M = q₀L²/(9√3) bei x = 0,577·L', 'Einfeldträger, Linienmoment m: |A| = |B| = m, M = 0', 'Kragarm, F am Ende: M = −F·L', 'Kragarm, q: M = −qL²/2', 'Kragarm, Dreieck hoch an der Einspannung: M = −q₀L²/6', 'Kragarm, Dreieck hoch am freien Ende: M = −q₀L²/3', 'Kragarm, Linienmoment m: |M| = m·L, V = 0', 'Kragarm-Überstand a mit q: Stützmoment −qa²/2'] },
+    { title: 'Rahmen und Stabwerke', lines: ['Pendelstab: beidseitig gelenkig, keine Last dazwischen – nur N, konstant, Kraft in Stabrichtung', 'Nullstab 1: unbelasteter Knoten mit zwei Stäben, die nicht auf einer Linie liegen – beide N = 0', 'Nullstab 2: unbelasteter Knoten mit drei Stäben, zwei auf einer Linie – der dritte N = 0', 'Biegesteife Ecke mit zwei Stäben: M läuft ohne Sprung um die Ecke, V des einen Stabs wird N des anderen', 'Gelenk: M = 0, dort schneiden für die fehlende Gleichung', 'Verläufe werden je Stab zur gestrichelten Faser angetragen'] },
     { title: 'Vorgehen', lines: ['Auflagerkräfte aus ΣH = 0, ΣV = 0, ΣM = 0 (und M = 0 am Gelenk)', 'Bereiche zwischen Lasten und Lagern festlegen', 'Im Bereich schneiden, Gleichgewicht am Teilsystem', 'Werte an den Bereichsgrenzen und Extremwerte eintragen', 'Kontrolle: Sprünge, Knicke, Randbedingungen'] }
   ];
 
@@ -1571,7 +1593,7 @@
     fmt, fmtL, fmtN,
     mkLoad, mkSup, baseSys, setIncline, isIncl, genSystem,
     loadArrays, solveSys, sgAt, sgArr, eqVec, curves, critPts, distRes, pickQ,
-    systemMods, classicCase, classicItem, buildQuestion, pickType, typePool, learnPool, nextPick, LEVEL_INFO, levelInfo, isClickType, isValType,
+    systemMods, classicCase, classicItem, buildQuestion, pickType, typePool, learnPool, nextPick, LEVEL_INFO, levelInfo, MAX_LEVEL, isClickType, isValType,
     clusterRanges, supNames, momentAtSupport, looksSame, featureRules, classicLine,
     tagExpl, tagLabel, praise, randomTip, rankName, RULES, cheatCases
   };

@@ -722,6 +722,7 @@
 
   // ans: { ok, chosen, clickS, tag }
   function feedback(q, ans) {
+    if (q.frame && N.framegen) return N.framegen.feedback(q, ans);
     const sys = q.sys, sol = q.sol || solveSys(sys);
     const c = context(sys, sol);
     const focus = focusOf(q.type);

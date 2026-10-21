@@ -1,7 +1,7 @@
 /* NVM – Oberfläche und Spielablauf */
 (function () {
   'use strict';
-  const N = window.NVM, D = N.draw;
+  const N = window.NVM, D = N.draw, DF = N.drawFrame;
   const $ = (id) => document.getElementById(id);
   const esc = D.esc, tex = D.htmlTex;
 
@@ -13,7 +13,7 @@
   function save(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { /* privat / gesperrt */ } }
   const settings = load('nvm.settings', {
     time: 'inf', calc: 'formel', incl: 'mix', theme: document.documentElement.dataset.theme || 'light',
-    sound: false, plot: 'tum', learnQtys: ['N', 'V', 'M'], learnTasks: ['verlauf', 'system', 'max', 'null', 'werte'], learnKinds: ['eft', 'krag', 'ueber', 'gerber'], learnLevel: '2'
+    sound: false, plot: 'tum', learnQtys: ['N', 'V', 'M'], learnTasks: ['verlauf', 'system', 'max', 'null', 'werte'], learnKinds: ['eft', 'krag', 'ueber', 'gerber', 'rahmen'], learnLevel: '2'
   });
   // Werte aus älteren Versionen übernehmen
   settings.theme = { paper: 'light', board: 'dark' }[settings.theme] || settings.theme;
@@ -28,7 +28,7 @@
     if (k === 'schraeg') settings.incl = 'nur';
     delete settings.learnQty; delete settings.learnTask; delete settings.learnKind;
   }
-  const MULTI = { learnQtys: ['N', 'V', 'M'], learnTasks: ['verlauf', 'system', 'max', 'null', 'werte'], learnKinds: ['eft', 'krag', 'ueber', 'gerber'] };
+  const MULTI = { learnQtys: ['N', 'V', 'M'], learnTasks: ['verlauf', 'system', 'max', 'null', 'werte'], learnKinds: ['eft', 'krag', 'ueber', 'gerber', 'rahmen'] };
   for (const k of Object.keys(MULTI)) {
     if (!Array.isArray(settings[k])) settings[k] = MULTI[k].slice();
     settings[k] = settings[k].filter((v) => MULTI[k].includes(v));
@@ -38,8 +38,8 @@
   delete stats.bestExam;
 
   // Lernmodus: alle Aufgaben, die zur Auswahl passen
-  const learnPool = () => N.learnPool(settings.learnQtys, settings.learnTasks, settings.learnKinds);
-  const taskExists = (task) => N.learnPool(settings.learnQtys, [task], settings.learnKinds).length > 0;
+  const learnPool = () => N.learnPool(settings.learnQtys, settings.learnTasks, settings.learnKinds, Number(settings.learnLevel));
+  const taskExists = (task) => N.learnPool(settings.learnQtys, [task], settings.learnKinds, Number(settings.learnLevel)).length > 0;
 
   // ---------------------------------------------------------- Zustand
   const S = {
@@ -112,10 +112,14 @@
       });
     });
     const lv = Number(settings.learnLevel), info = N.levelInfo(lv);
-    $('levelDesc').innerHTML = `<strong>Stufe ${lv}, ${esc(info.name)}:</strong> ${esc(info.loads)} Die Stufe bestimmt Zahl und Art der Lasten, die Tragwerke wählst du oben.`;
+    $('levelDesc').innerHTML = `<strong>Stufe ${lv}, ${esc(info.name)}:</strong> ${esc(info.loads)} Die Stufe bestimmt Größe der Systeme und Zahl der Lasten, die Tragwerke wählst du oben.`;
     const empty = !learnPool().length;
-    $('learnWarn').hidden = !empty;
-    $('learnWarn').textContent = empty ? 'Für diese Auswahl gibt es keine Aufgaben. Wähle eine weitere Schnittgröße, Aufgabe oder ein anderes Tragwerk.' : '';
+    const onlyFrames = settings.learnKinds.length === 1 && settings.learnKinds[0] === 'rahmen';
+    let warn = '';
+    if (empty) warn = onlyFrames && lv < 4 ? 'Rahmen und Stabwerke gibt es ab Stufe 4.' : onlyFrames ? 'Rahmen und Stabwerke gibt es nur bei „Verlauf zum System“.' : 'Für diese Auswahl gibt es keine Aufgaben. Wähle eine weitere Schnittgröße, Aufgabe oder ein anderes Tragwerk.';
+    else if (settings.learnKinds.includes('rahmen') && lv < 4) warn = 'Rahmen und Stabwerke kommen erst ab Stufe 4 dran.';
+    $('learnWarn').hidden = !warn;
+    $('learnWarn').textContent = warn;
     $('soundBtn').setAttribute('aria-pressed', String(!!settings.sound));
   }
   document.querySelectorAll('.seg[data-setting]').forEach((seg) => {
@@ -149,7 +153,13 @@
     return { calc: arcade ? ARCADE.calc : settings.calc, incl, task: 'mix' };
   }
   function timeFor() {
-    if (S.mode === 'arcade') return Math.max(15, 34 - 3 * S.level);
+    if (S.mode === 'arcade') {
+      // Rahmen brauchen mehr Zeit; nach der letzten Stufe wird es nur noch knapper
+      let t = Math.max(16, 34 - 3 * Math.min(S.level, 6));
+      if (S.q && S.q.frame) t += 14;
+      if (S.level > N.MAX_LEVEL) t = Math.max(12, t - 2 * (S.level - N.MAX_LEVEL));
+      return t;
+    }
     return settings.time === 'inf' ? Infinity : Number(settings.time) || Infinity;
   }
 
@@ -190,7 +200,6 @@
   }
 
   function nextQuestion(force) {
-    S.tMax = timeFor(); S.timed = isFinite(S.tMax); S.tLeft = S.tMax;
     const c = cfg();
     if (force) S.q = N.buildQuestion(S.level, 'mix', 'alle', force, c);
     else if (S.mode === 'learn') {
@@ -203,6 +212,7 @@
       S.q = N.buildQuestion(S.level, 'mix', 'alle', t, c);
     }
     S.lastType = S.q.type;
+    S.tMax = timeFor(); S.timed = isFinite(S.tMax); S.tLeft = S.tMax;
     S.state = 'question'; S.solShown = false; S.chosen = -1; S.clickS = NaN; S.fresh = true;
     timerEl.hidden = !S.timed;
     timerFill.style.transform = 'scaleX(1)';
@@ -247,6 +257,12 @@
 
   function renderSystem(withSol) {
     const q = S.q;
+    if (q.frame) {
+      $('systemBox').innerHTML = DF.system(q.fr, { mode: 'full', narrow: isNarrow() }).svg;
+      $('systemBox').classList.remove('tappable');
+      S.map = null;
+      return;
+    }
     const r = D.system(q.sys, { mode: 'full', symbolic: q.symbolic && !withSol, sol: withSol ? q.sol : null, narrow: isNarrow() });
     const box = $('systemBox');
     box.innerHTML = r.svg;
@@ -263,10 +279,11 @@
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'answer';
-      const graphic = q.type.startsWith('diag') || q.type.startsWith('sysFrom');
+      const graphic = q.type.startsWith('diag') || q.type.startsWith('sysFrom') || !!q.frame;
       if (graphic) b.setAttribute('aria-label', `Antwort ${k + 1}`);
       let inner = `<span class="num" aria-hidden="true">${k + 1}</span>`;
-      if (q.type.startsWith('diag')) inner += D.diagram(o.xs.map((x) => x * ca()), o.f, q.qty, Lp(), { compact: true });
+      if (q.frame) inner += DF.diagram(o.fr || q.fr, null, q.qty, { compact: true, cv: o.cv });
+      else if (q.type.startsWith('diag')) inner += D.diagram(o.xs.map((x) => x * ca()), o.f, q.qty, Lp(), { compact: true });
       else if (q.type.startsWith('sysFrom')) inner += D.system(o.sys, { mode: 'compact', symbolic: true }).svg;
       else inner += `<span class="val">${tex(o.label)}</span>`;   // KaTeX liefert MathML für Bildschirmleser mit
       if (fb) {
@@ -355,13 +372,13 @@
       if (S.mode === 'arcade') {
         const tb = isFinite(S.tMax) ? Math.round(100 * Math.max(S.tLeft, 0) / S.tMax) : 0;
         const mult = 1 + 0.25 * Math.min(S.streak - 1, 4);
-        S.lastPts = Math.round((100 * S.level + tb) * mult);
+        S.lastPts = Math.min(1400, Math.round((100 * S.level + tb) * mult));   // höchstens 1400 je Antwort (Prüfung in der Datenbank)
         S.score += S.lastPts;
-        const nl = Math.min(6, 1 + Math.floor(S.nCorrect / 5));
+        const nl = Math.min(N.MAX_LEVEL + 1, 1 + Math.floor(S.nCorrect / 5));
         if (nl > S.level) {
           S.level = nl;
           const info = N.levelInfo(nl);
-          S.levelUp = nl <= 5 ? `Level ${nl}, ${info.name}: ${info.loads}` : `Level ${nl}: wie Stufe 5, aber mit weniger Zeit.`;
+          S.levelUp = nl <= N.MAX_LEVEL ? `Level ${nl}, ${info.name}. ${info.short}` : `Level ${nl}: wie Stufe ${N.MAX_LEVEL}, aber mit weniger Zeit.`;
         }
       }
     } else {
@@ -389,6 +406,15 @@
     if (!isClick() && S.state === 'feedback') { $('answers').hidden = false; renderAnswers(true); } else $('answers').hidden = true;
     $('tapinfo').hidden = true;
     renderSystem(true);
+    if (q.frame) {
+      const o = { values: true, cv: q.fcv, W: isNarrow() ? 520 : 800, animate: true };
+      let fh = '';
+      for (const qty of ['N', 'V', 'M']) fh += `<div class="strip strip-frame">${DF.diagram(q.fr, q.fsol, qty, o)}</div>`;
+      $('solution').innerHTML = fh;
+      $('solution').hidden = false;
+      updateButtons();
+      return;
+    }
     const W = isNarrow() ? 420 : 800, H = isNarrow() ? 170 : 150;
     const xs = q.cv.xs.map((x) => x * ca()), crit = q.cv.crit.map((c) => c * ca());
     const o = { values: true, crit, W, H, animate: true };
@@ -424,7 +450,7 @@
     }
     let extra = '';
     if (q.symbolic) extra = '<p class="muted">Die Maße sind als Buchstaben angegeben – gesucht ist die passende Formel.</p>';
-    $('explain').innerHTML = `<p class="tip"><strong>Tipp:</strong> ${tex(N.randomTip())}</p><p class="muted">${esc(mode)}</p>${extra}`;
+    $('explain').innerHTML = `<p class="tip"><strong>Tipp:</strong> ${tex(q.frame ? N.framegen.tip() : N.randomTip())}</p><p class="muted">${esc(mode)}</p>${extra}`;
     $('explain').scrollTop = 0;
   }
 

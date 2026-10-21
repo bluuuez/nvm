@@ -142,6 +142,7 @@ kbd {
 .system { position: relative; padding: 6px; }
 .system svg { display: block; width: 100%; height: min(30vh, 270px); }
 .system.tappable svg { cursor: crosshair; touch-action: none; }
+.system svg.sv-frame { height: min(48vh, 440px); }
 
 .answers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .answer {
@@ -152,6 +153,7 @@ kbd {
   transition: border-color .15s, transform .15s;
 }
 .answer svg { display: block; width: 100%; height: min(17vh, 175px); }
+.answer svg.sv-frame { height: min(22vh, 215px); }
 .answer .num {
   position: absolute; top: 8px; left: 8px; z-index: 1;
   display: grid; place-items: center; width: 30px; height: 30px;
@@ -187,6 +189,7 @@ kbd {
 
 .solution { display: grid; padding: 4px 6px; }
 .solution svg { display: block; width: 100%; height: auto; max-height: 17vh; }
+.solution .strip-frame svg { max-height: min(46vh, 430px); }
 .solution .strip + .strip { border-top: 1px dashed var(--line); }
 .solution-note { margin: 4px 8px 6px; color: var(--ink-soft); font-size: .85rem; }
 .tapinfo { padding: 28px; color: var(--ink-soft); text-align: center; }
@@ -252,6 +255,7 @@ kbd {
 .sv-dim { stroke: var(--ink-soft); stroke-width: .9; }
 .sv-angle { fill: none; stroke: var(--load); stroke-width: 1.5; }
 .sv-axis { stroke: var(--ink-soft); stroke-width: 1.4; }
+.sv-frame-thin { stroke: var(--ink-soft); stroke-width: 1.6; stroke-linecap: round; }
 text.sv-load-text, text.sv-angle-text { fill: var(--load); font-weight: 600; }
 text.sv-name { fill: var(--ink-soft); font-weight: 700; }
 text.sv-name-soft, text.sv-dim-text, text.sv-unit, text.sv-note { fill: var(--ink-soft); }
@@ -456,6 +460,8 @@ text.sv-cross-text { font-weight: 700; pointer-events: none; }
   #cheatBtn { display: none; }
   .question { font-size: 1.25rem; }
   .system svg { height: auto; max-height: 38vh; }
+  .system svg.sv-frame { height: auto; max-height: 52vh; }
+  .answer svg.sv-frame { height: auto; }
   .answers { gap: 10px; }
   .answer { min-height: 0; padding: 6px 4px 4px; border-radius: var(--radius); }
   .answer svg { height: auto; margin-top: 18px; }

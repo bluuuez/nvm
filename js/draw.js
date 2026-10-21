@@ -702,5 +702,9 @@
     return `<svg viewBox="0 0 ${W} ${H}" class="sv sv-diagram">${g}${front}</svg>`;
   }
 
-  root.NVM.draw = { system, diagram, htmlTex, svgTex, esc, setPlotMode };
+  root.NVM.draw = {
+    system, diagram, htmlTex, svgTex, esc, setPlotMode, plotMode: () => plotMode,
+    // Bausteine für drawframe.js
+    _: { text, line, arrow, arrowL, makeLabeler, support, supDepth, momentArc, beamSvg, FIB, SUP, dimTick, r1, esc }
+  };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -24,9 +24,13 @@ einträgt, schickt Name, Punkte, Level und Zeitpunkt an die Datenbank (Supabase)
   Verlauf bereichsweise) und bei Fehlern die konkrete Abweichung (Vorzeichen, Randwert, Sprung,
   Knick, Form)
 
-Stufen: 1 Einstieg (eine Einzel- oder Gleichstreckenlast), 2 Grundlagen (auch Teil-, Dreiecks-,
-Einzel- und Linienmomentlasten), 3 Fortgeschritten (ein bis zwei Lasten, auch schräge und
-waagerechte Kräfte), 4 Klausurniveau (zwei Lasten), 5 Profi (zwei bis drei Lasten).
+Stufen: 1 Einstieg (Einfeldträger und Kragarm, eine Last), 2 Grundlagen (Träger mit Kragarm,
+alle Lastarten), 3 Fortgeschritten (Gerberträger, ein bis zwei Lasten), 4 Erste Rahmen (Kragwinkel,
+Knick- und Treppenträger, abgespannte Träger), 5 Rahmen (Rahmen, Dreigelenkrahmen, Gelenkträger auf
+Pendelstützen), 6 Pendel- und Nullstäbe (Fachwerkunterbau, unterspannte Träger, Stäbe auf
+Pendelstäben), 7 Klausurniveau, 8 Profi. Rahmen und Stabwerke gibt es nur als „Verlauf zum System“.
+Ihre Schwierigkeit wird aus Größe, Lösungsweg und Lasten berechnet (Stäbe, Gelenke, Ecken, schräge
+Stäbe, Teilsysteme, Nullstäbe, Lastarten), nicht nur aus der Zahl der Lasten.
 - **Spickzettel:** Vorzeichen, Beziehungen, Standardfälle
 - **Bestenliste:** nach dem Arcade einen Namen eintragen (Filter gegen Beleidigungen in App und
   Datenbank) und sehen, auf welchem Platz man steht
@@ -42,12 +46,13 @@ V und N positiv oben, Hell oder Dunkel.
 Lasten: Einzellasten (auch schräg und waagerecht), Gleich- und Dreieckslasten, Einzelmomente und
 Linienmomente. Vorzeichen und Differentialbeziehungen wie in Statik 1 an der TUM
 (x nach rechts, z nach unten, dN/dx = −n, dV/dx = −q, dM/dx = V − m).
-Der Löser ist gegen die Tabellen in Schneider, Bautabellen (Abschnitt 4 A) geprüft.
+Der Löser ist gegen die Tabellen in Schneider, Bautabellen (Abschnitt 4 A) geprüft, der
+Stabwerkslöser gegen die Lösungen der Schnittgrößensammlung (Statik 1, TUM).
 
 ## Tasten
 
 `1`–`4` antworten · `Leertaste` weiter · `L` Lösung · `H` Spickzettel · `T` Hell/Dunkel ·
-`S` Ton · `B` Boss-Taste · `Esc` Menü
+`S` Ton · `Esc` Menü
 
 ## Bestenliste einrichten
 
@@ -62,6 +67,9 @@ Ohne Eintrag in `js/config.js` ist die Bestenliste ausgeblendet.
 - `js/core.js` – Löser, Aufgaben, Fehlerkatalog, Merksätze
 - `js/explain.js` – Lösungsweg und Fehlerdiagnose nach jeder Antwort
 - `js/draw.js` – Systeme und Verläufe als SVG
+- `js/frame.js` – Löser für ebene Stabwerke (Rahmen, Gelenke, Pendel- und Nullstäbe)
+- `js/framegen.js` – Stabwerk-Familien, Schwierigkeitswert, falsche Antworten, Erklärungen
+- `js/drawframe.js` – Stabwerke und ihre Verläufe als SVG
 - `js/app.js` – Oberfläche und Spielablauf
 - `sw.js` – Offline-Modus
 - `js/board.js`, `js/config.js`, `supabase.sql` – Online-Bestenliste

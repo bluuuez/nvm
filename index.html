@@ -107,7 +107,7 @@
       <div class="modes">
         <button class="mode mode-main" type="button" data-mode="arcade">
           <span class="mode-name">Arcade spielen</span>
-          <span class="mode-desc">Drei Leben und Zeitlimit. Alles gemischt, alle fünf richtigen Antworten steigt das Level. Für alle gleich, damit die Bestenliste fair ist: Werte im Kopf rechnen, ab und zu schiefe Stäbe.</span>
+          <span class="mode-desc">Drei Leben und Zeitlimit. Alles gemischt, alle fünf richtigen Antworten steigt das Level, ab Level 4 kommen Rahmen und Stabwerke dazu. Für alle gleich, damit die Bestenliste fair ist: Werte im Kopf rechnen, ab und zu schiefe Stäbe.</span>
         </button>
         <button class="mode" type="button" data-mode="learn">
           <span class="mode-name">Lernen</span>
@@ -151,11 +151,11 @@
         </div>
         <div class="seg" data-setting="learnKinds" data-multi role="group" aria-label="Tragwerke">
           <span class="seg-label">Tragwerke</span>
-          <button type="button" data-v="eft">Einfeldträger</button><button type="button" data-v="krag">Kragarm</button><button type="button" data-v="ueber">Mit Kragarm</button><button type="button" data-v="gerber">Gerberträger</button>
+          <button type="button" data-v="eft">Einfeldträger</button><button type="button" data-v="krag">Kragarm</button><button type="button" data-v="ueber">Mit Kragarm</button><button type="button" data-v="gerber">Gerberträger</button><button type="button" data-v="rahmen">Rahmen und Stabwerke</button>
         </div>
         <div class="seg" data-setting="learnLevel" role="radiogroup" aria-label="Stufe">
           <span class="seg-label">Stufe</span>
-          <button type="button" data-v="1">1</button><button type="button" data-v="2">2</button><button type="button" data-v="3">3</button><button type="button" data-v="4">4</button><button type="button" data-v="5">5</button>
+          <button type="button" data-v="1">1</button><button type="button" data-v="2">2</button><button type="button" data-v="3">3</button><button type="button" data-v="4">4</button><button type="button" data-v="5">5</button><button type="button" data-v="6">6</button><button type="button" data-v="7">7</button><button type="button" data-v="8">8</button>
         </div>
         <p class="level-desc" id="levelDesc" aria-live="polite"></p>
         <p class="learn-warn" id="learnWarn" hidden></p>
@@ -246,7 +246,10 @@
   <script src="js/board.js"></script>
   <script src="js/math.js"></script>
   <script src="js/explain.js"></script>
+  <script src="js/frame.js"></script>
+  <script src="js/framegen.js"></script>
   <script src="js/draw.js"></script>
+  <script src="js/drawframe.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

@@ -394,7 +394,7 @@
       S.streak = 0;
       if (S.mode === 'arcade') S.lives--;
       if (tag) S.mistakes[tag] = (S.mistakes[tag] || 0) + 1;
-      if (navigator.vibrate) { try { navigator.vibrate(60); } catch (e) { /* egal */ } }
+      if (navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) { try { navigator.vibrate(60); } catch (e) { /* egal */ } }
     }
     beep(ok);
     S.pendingEnd = S.mode === 'arcade' && S.lives <= 0;

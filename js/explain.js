@@ -270,15 +270,15 @@
   // ---------------------------------------------------------- Verlauf bereichsweise
   function pointCauses(c, s) {
     const { sys, e } = c, out = [];
-    sys.sup.forEach((sp, i) => { if (Math.abs(sp.x - s) < 1e-6) out.push({ k: 'sup', i, txt: `Lager ${c.names[i]}` }); });
+    sys.sup.forEach((sp, i) => { if (Math.abs(sp.x - s) < 1e-6) out.push({ k: 'sup', i, txt: `Lager ${c.names[i]}`, short: `Lager ${c.names[i]}` }); });
     for (const ld of sys.loads) {
       if (Math.abs(ld.x - s) > 1e-6) continue;
       if (ld.type === 'F') {
         const txt = ld.sub === 'H' ? `H = ${fmtN(Math.abs(ld.Fx))} kN`
           : ld.sub === 'Fs' ? `F = ${fmtN(ld.mag)} kN schräg: F_v = ${fmt(ld.v)} kN, F_h = ${fmt(Math.abs(ld.Fx))} kN` : `F = ${fmtN(ld.v)} kN`;
-        out.push({ k: 'F', txt });
+        out.push({ k: 'F', txt, short: ld.sub === 'H' ? 'Horizontalkraft' : ld.sub === 'Fs' ? 'schräge Einzellast' : 'Einzellast' });
       }
-      else if (ld.type === 'M') out.push({ k: 'M', txt: `Einzelmoment ${fmtN(Math.abs(ld.v))} kNm` });
+      else if (ld.type === 'M') out.push({ k: 'M', txt: `Einzelmoment ${fmtN(Math.abs(ld.v))} kNm`, short: 'Einzelmoment' });
     }
     sys.hinges.forEach((h) => { if (Math.abs(h - s) < 1e-6) out.push({ k: 'G', txt: 'Gelenk' }); });
     if ((s < e || s > c.L - e) && !sys.sup.some((sp) => Math.abs(sp.x - s) < 1e-6)) out.push({ k: 'free', txt: 'freies Ende' });
@@ -412,17 +412,39 @@
   const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
 
   // g(s): gewählter Verlauf; gl/gr: links- und rechtsseitiger Wert; extraJumps: Stellen, an denen nur die Wahl springt
-  function curveWhy(c, Q, g, gl, gr, extraJumps, mode) {
-    const sc = c.scale[Q], tol = 0.08 * sc, u = UNIT[Q], nm = QNAME[Q];
+  // Vergleicht einen falschen Verlauf g mit dem richtigen.
+  // mode 'diag': Antwortbilder sind einzeln skaliert und ohne Zahlen – also nur Formmerkmale
+  //              (Vorzeichen, Nullstellen am Rand, Sprünge, Knicke, Form, Lage des Maximums).
+  // mode 'sys':  Der gezeigte Verlauf (mit Werten) ist richtig, g gehört zu einem anderen System.
+  function curveWhy(c, Q, g0, gl0, gr0, extraJumps, mode) {
     const sys = mode === 'sys';
-    const { P, RG } = placer(c, mode);
-    const you = sys ? 'Dieses System ergäbe' : 'Deine Wahl zeigt';
+    const nm = QNAME[Q], u = UNIT[Q];
     const ss = [];
-    for (let i = 0; i <= 120; i++) ss.push(c.L * (0.002 + 0.996 * i / 120));
+    for (let i = 0; i <= 160; i++) ss.push(c.L * (0.002 + 0.996 * i / 160));
+    const sc = c.scale[Q];
+    // im Diagramm-Modus auf gleiche Höhe skalieren, damit nur die Form zählt
+    let k = 1;
+    if (!sys) { const gm = maxAbs(ss.map(g0)); if (gm > 1e-9) k = sc / gm; }
+    const g = (s) => k * g0(s), gl = (s) => k * gl0(s), gr = (s) => k * gr0(s);
+    const tol = 0.08 * sc;
+    const { P, RG } = placer(c, mode);
+    const you = sys ? 'Dieses System ergäbe' : 'Deine Wahl';
     const cp = critPts(c.sys);
+    const signWord = (v) => (Q === 'M' ? (v > 0 ? 'positiv (Zug unten, auf der Seite der gestrichelten Faser)' : 'negativ (Zug oben)')
+      : Q === 'N' ? (v > 0 ? 'positiv (Zug)' : 'negativ (Druck)') : (v > 0 ? 'positiv' : 'negativ'));
     const regionMid = (s) => { for (let i = 0; i < cp.length - 1; i++) if (s >= cp[i] && s <= cp[i + 1]) return (cp[i] + cp[i + 1]) / 2; return s; };
+    const causesAt = (s) => pointCauses(c, s).filter((x) => x.k !== 'G' && x.k !== 'free').map((x) => x.short || x.txt).join(', ');
+    const realJump = (s0) => {
+      if (sys) return '';
+      if (regionLoads(c, s0 - c.e, s0 + c.e).some((l) => l.type === 'q')) return ' Dort liegt nur die Streckenlast – sie wirkt verteilt und lässt den Verlauf stetig, ohne Sprung.';
+      const js = cp.filter((p) => p > c.e && p < c.L - c.e && Math.abs(c.right(p, Q) - c.left(p, Q)) > tol);
+      if (!js.length) return '';
+      const n0 = js.reduce((m, p) => (Math.abs(p - s0) < Math.abs(m - s0) ? p : m));
+      return ` Richtig springt ${nm} ${P(n0)} (${causesAt(n0)}).`;
+    };
+    const jumpWhy = Q === 'M' ? 'ein Einzelmoment lässt M springen' : Q === 'N' ? 'eine Kraft längs der Stabachse lässt N springen' : 'eine Kraft quer zum Stab lässt V um ihren Betrag springen';
 
-    // 1) Vorzeichen
+    // 1) Vorzeichen: gleiche Form, gespiegelt
     const dev = ss.reduce((m, s) => m + Math.abs(g(s) + c.at(s, Q)), 0) / ss.length;
     const same = ss.reduce((m, s) => m + Math.abs(g(s) - c.at(s, Q)), 0) / ss.length;
     if (dev < 0.06 * sc && same > 0.3 * sc) {
@@ -431,75 +453,78 @@
       const smid = regionMid(sm);
       const sp = Math.abs(c.at(smid, Q)) > 0.5 * Math.abs(c.at(sm, Q)) ? smid : sm;
       const v = c.at(sp, Q);
-      const why = Q === 'M' ? (v > 0 ? 'positiv, also Zug unten – angetragen auf der Seite der gestrichelten Faser' : 'negativ, also Zug oben')
-        : Q === 'N' ? (v > 0 ? 'also Zug und damit positiv' : 'also Druck und damit negativ')
-          : (v > 0 ? 'also positiv' : 'also negativ');
-      const out = [`${sys ? 'Dieses System ergäbe genau den umgekehrten Verlauf' : 'Form richtig, aber Vorzeichen umgekehrt'}: ${cap(P(sp))} ist ${nm} = ${fmt(v)} ${u}, ${why}.`];
+      const out = [sys
+        ? `Dieses System ergäbe genau den gespiegelten Verlauf: ${P(sp)} wäre ${nm} ${v > 0 ? 'negativ' : 'positiv'}, gezeigt ist ${signWord(v)}.`
+        : `Die Form stimmt, aber das Vorzeichen ist umgekehrt: ${cap(P(sp))} ist ${nm} ${signWord(v)}.`];
       if (Q === 'V') {
         const j = c.sol.unk.findIndex((x) => Math.abs(x.x) < c.e && x.c === 'V');
-        if (j >= 0) out.push(`Schnitt direkt rechts vom linken Lager: Am linken Teil wirkt nur ${sym(c, c.sol.unk[j])} = ${fmt(c.sol.R[j])} kN (positiv = nach oben). Für das Gleichgewicht muss V am Schnittufer genauso groß sein und zeigt nach unten – das ist die positive Richtung.`);
+        if (j >= 0) out.push(`Schnitt direkt rechts vom linken Lager: Am linken Teil wirkt nur ${sym(c, c.sol.unk[j])} nach ${c.sol.R[j] >= 0 ? 'oben' : 'unten'}. Damit das Teil im Gleichgewicht ist, zeigt V am Schnittufer nach ${c.sol.R[j] >= 0 ? 'unten – das ist die positive Richtung' : 'oben – das ist die negative Richtung'}.`);
         else if (!c.sys.sup.some((p) => p.x < c.e)) out.push('Am freien linken Ende beginnt V bei 0. Lasten nach unten lassen V nach rechts kleiner werden (dV/dx = −q), also wird V negativ.');
-      } else if (Q === 'N') out.push('Zieht die Last vom Festlager bzw. von der Einspannung weg, wird der Stab dazwischen gedehnt (Zug). Drückt sie dorthin, wird er gestaucht (Druck).');
+      } else if (Q === 'M') out.push('Merkhilfe: M wird auf der Zugseite angetragen. Hängt der Träger zwischen zwei Lagern durch, ist unten Zug; über einer Einspannung oder einem Innenlager ist oben Zug.');
+      else if (Q === 'N') out.push('Zieht die Last vom Festlager bzw. von der Einspannung weg, wird der Stab dazwischen gedehnt (Zug). Drückt sie dorthin, wird er gestaucht (Druck).');
       return out;
     }
     // 2) Randbedingungen M = 0 / V = 0
     const bcs = [];
     if (Q === 'M') {
-      for (const h of c.sys.hinges) bcs.push({ s: h, at: 'Am Gelenk', there: 'dort sitzt ein Gelenk' });
+      for (const h of c.sys.hinges) bcs.push({ s: h, at: 'Am Gelenk', there: 'dort sitzt ein Gelenk', why: 'ein Gelenk kein Moment überträgt' });
       for (const s of [0, c.L]) {
-        if (pointCauses(c, s).some((k) => k.k === 'free')) bcs.push({ s, at: 'Am freien Ende', there: 'dort ist das freie Ende' });
+        if (pointCauses(c, s).some((x) => x.k === 'free')) bcs.push({ s, at: 'Am freien Ende', there: 'dort ist das freie Ende', why: 'dort nichts dagegenhält' });
         else {
           const sp = c.sys.sup.find((p) => Math.abs(p.x - s) < 1e-6);
           if (sp && sp.type !== 'einsp') {
             const nmS = c.names[c.sys.sup.indexOf(sp)];
-            bcs.push({ s, at: `Am gelenkigen Endlager ${nmS}`, there: `dort sitzt das gelenkige Lager ${nmS}` });
+            bcs.push({ s, at: `Am gelenkigen Endlager ${nmS}`, there: `dort sitzt das gelenkige Lager ${nmS}`, why: 'ein gelenkiges Lager kein Moment aufnimmt' });
           }
         }
       }
     } else if (Q === 'V') {
-      for (const s of [0, c.L]) if (pointCauses(c, s).some((k) => k.k === 'free')) bcs.push({ s, at: 'Am freien Ende', there: 'dort ist das freie Ende' });
+      for (const s of [0, c.L]) if (pointCauses(c, s).some((x) => x.k === 'free')) bcs.push({ s, at: 'Am freien Ende', there: 'dort ist das freie Ende', why: 'dort keine Kraft angreift' });
     }
     for (const b of bcs) {
       const s = Math.min(Math.max(b.s, c.L * 0.004), c.L * 0.996), v = c.at(s, Q), gv = g(s);
       if (Math.abs(v) < 0.02 * sc && Math.abs(gv) > tol) {
         return [sys
-          ? `Der gezeigte Verlauf ist ${P(b.s)} null, ${b.there}. ${you} dort ${nm} = ${fmt(gv)} ${u}.`
-          : `${b.at} (${c.X(b.s)}) muss ${nm} = 0 sein. ${you} dort ${nm} = ${fmt(gv)} ${u}.`];
+          ? `Der gezeigte Verlauf ist ${P(b.s)} null, ${b.there}. ${you} dort ${nm} ≠ 0.`
+          : `${b.at} (${c.X(b.s)}) muss ${nm} = 0 sein, weil ${b.why}. ${you} ist dort nicht null.`];
       }
     }
     // 3) Sprünge
     for (const s of cp) {
       if (s <= c.e || s >= c.L - c.e) continue;
       const dc = c.right(s, Q) - c.left(s, Q), dg = gr(s) - gl(s);
-      if (Math.abs(dc - dg) <= tol) continue;
-      const causes = pointCauses(c, s).filter((k) => k.k !== 'G' && k.k !== 'free').map((k) => k.txt).join(', ');
-      if (Math.abs(dc) > tol && Math.abs(dg) <= tol) {
+      const hasC = Math.abs(dc) > tol, hasG = Math.abs(dg) > tol;
+      if (hasC && !hasG) {
         return [sys
           ? `Der gezeigte Verlauf springt ${P(s)} um ${fmt(dc)} ${u}. So ein Sprung entsteht nur durch ${Q === 'M' ? 'ein Einzelmoment' : Q === 'N' ? 'eine Kraft längs der Stabachse' : 'eine Einzellast oder ein Lager'} genau an dieser Stelle. Dieses System hat dort nichts davon.`
-          : `Bei ${c.X(s)} (${causes}) muss ${nm} um ${fmt(dc)} ${u} springen. Deine Wahl hat dort keinen Sprung.`];
+          : `Bei ${c.X(s)} (${causesAt(s)}) muss ${nm} springen, denn ${jumpWhy}. ${you} verläuft dort ohne Sprung.`];
       }
-      if (Math.abs(dc) <= tol && Math.abs(dg) > tol) {
+      if (!hasC && hasG) {
         return [sys
-          ? `Dieses System hätte ${P(s)} einen Sprung von ${fmt(dg)} ${u}. Der gezeigte Verlauf ist dort aber stetig.`
-          : `Deine Wahl springt bei ${c.X(s)} um ${fmt(dg)} ${u}. Dort greift aber nichts an, was ${nm} springen lässt.`];
+          ? `Dieses System hätte ${P(s)} einen Sprung in ${nm}. Der gezeigte Verlauf ist dort aber stetig.`
+          : `${you} springt bei ${c.X(s)}. Dort greift aber nichts an, was ${nm} springen lässt${Q === 'M' ? ' – dafür bräuchte es ein Einzelmoment' : ''}.${realJump(s)}`];
       }
-      return [sys
-        ? `Der gezeigte Verlauf springt ${P(s)} um ${fmt(dc)} ${u}, dieses System ergäbe dort ${fmt(dg)} ${u}.`
-        : `Bei ${c.X(s)} (${causes}) springt ${nm} um ${fmt(dc)} ${u}, in deiner Wahl um ${fmt(dg)} ${u}.`];
+      if (hasC && hasG && Math.sign(dc) !== Math.sign(dg)) {
+        return [sys
+          ? `Der gezeigte Verlauf springt ${P(s)} ${dc > 0 ? 'nach oben' : 'nach unten'}, dieses System ergäbe einen Sprung ${dg > 0 ? 'nach oben' : 'nach unten'}.`
+          : `Bei ${c.X(s)} (${causesAt(s)}) springt ${nm} in die falsche Richtung: richtig ist ein Sprung ${dc > 0 ? 'zu größeren' : 'zu kleineren'} Werten.`];
+      }
+      if (sys && hasC && hasG && Math.abs(dc - dg) > tol) {
+        return [`Der gezeigte Verlauf springt ${P(s)} um ${fmt(dc)} ${u}, dieses System ergäbe dort ${fmt(dg)} ${u}.`];
+      }
     }
     for (const s of extraJumps) {
       if (s <= 0.01 * c.L || s >= 0.99 * c.L || cp.some((p) => Math.abs(p - s) < 0.02 * c.L)) continue;
-      const dg = gr(s) - gl(s);
-      if (Math.abs(dg) <= tol) continue;
+      if (Math.abs(gr(s) - gl(s)) <= tol) continue;
       return [sys
-        ? `Dieses System hätte ${P(s)} einen Sprung von ${fmt(dg)} ${u}. Der gezeigte Verlauf ist dort aber stetig.`
-        : `Deine Wahl springt bei ${c.X(s)} um ${fmt(dg)} ${u}. An dieser Stelle greift aber keine Last an – ein Sprung braucht ${Q === 'M' ? 'ein Einzelmoment' : 'eine Einzellast'}.`];
+        ? `Dieses System hätte ${P(s)} einen Sprung in ${nm}. Der gezeigte Verlauf ist dort aber stetig.`
+        : `${you} springt bei ${c.X(s)}. An dieser Stelle greift aber keine Einzellast an – ein Sprung braucht ${Q === 'M' ? 'ein Einzelmoment' : 'eine Einzellast'}.${realJump(s)}`];
     }
-    // 4) Form im Bereich (verglichen wird mit der Form des richtigen Verlaufs im selben Bereich)
+    // 4) Form im Bereich
     const shape = (f, a, w) => {
-      const p = [0.08, 0.3, 0.5, 0.7, 0.92].map((t) => f(a + t * w));
-      const lin = (t) => p[0] + (p[4] - p[0]) * (t - 0.08) / 0.84;
-      return { range: Math.max(...p) - Math.min(...p), curv: Math.max(...[0.3, 0.5, 0.7].map((t, k) => Math.abs(p[k + 1] - lin(t)))) };
+      const p = [0.06, 0.28, 0.5, 0.72, 0.94].map((t) => f(a + t * w));
+      const lin = (t) => p[0] + (p[4] - p[0]) * (t - 0.06) / 0.88;
+      return { range: Math.max(...p) - Math.min(...p), curv: Math.max(...[0.28, 0.5, 0.72].map((t, j) => Math.abs(p[j + 1] - lin(t)))) };
     };
     for (let i = 0; i < cp.length - 1; i++) {
       const a = cp[i], b = cp[i + 1], w = b - a;
@@ -510,35 +535,88 @@
       let got;
       if (G.range < 0.03 * sc) got = 0;
       else if (want === 2) got = G.curv < 0.35 * C.curv ? 1 : 2;
-      else got = G.curv > Math.max(0.03 * sc, 0.2 * G.range) ? 2 : 1;
-      if (got === want) continue;
+      else got = G.curv > Math.max(0.02 * sc, 0.08 * G.range) ? 2 : 1;
+      if (got === want) {
+        const cz = Math.max(...[0.2, 0.5, 0.8].map((t) => Math.abs(c.at(a + t * w, Q)))) < 0.02 * sc;
+        const gz = Math.max(...[0.2, 0.5, 0.8].map((t) => Math.abs(g(a + t * w)))) < 0.04 * sc;
+        if (cz !== gz) {
+          const why0 = Q === 'N' ? 'Normalkraft gibt es nur zwischen der Längslast und dem Lager, das sie aufnimmt (Festlager bzw. Einspannung)'
+            : Q === 'V' ? 'auf diesem Abschnitt bis zum Rand greift keine Querlast an' : 'auf diesem Abschnitt bis zum Rand greift nichts an, was ein Moment erzeugt';
+          return [sys
+            ? `Der gezeigte Verlauf ist ${RG(a, b)} ${cz ? 'null' : 'nicht null'}. Dieses System ergäbe dort ${cz ? 'einen Wert ungleich null' : 'null'}.`
+            : cz ? `${cap(RG(a, b))} ist ${nm} = 0 – ${why0}. ${you} zeigt dort ${nm} ≠ 0.`
+              : `${cap(RG(a, b))} ist ${nm} nicht null. ${you} ist dort null.${Q === 'N' ? ' Prüf, welches Lager die Längskraft aufnimmt – nur das Festlager bzw. die Einspannung kann das.' : ''}`];
+        }
+        continue;
+      }
       const zero = want === 0 && Math.abs(c.at(a + w / 2, Q)) < 0.02 * sc;
+      const deg = expectedDegree(c, lds, Q, c.at(a, Q), c.at(b, Q));
       const words = ['konstant', 'linear', 'gekrümmt'];
-      const reason = Q === 'V'
+      const wantTxt = zero ? 'null' : want === 2 ? (DEG_WORD[Q][deg] || 'gekrümmt') : words[want];
+      const reason = zero ? 'zwischen diesem Abschnitt und dem freien Ende greift keine Last an' : Q === 'V'
         ? (want === 0 ? 'ohne Streckenlast ist dV/dx = −q = 0' : 'unter der Streckenlast ändert sich V stetig (dV/dx = −q)')
         : Q === 'M'
-          ? (want === 2 ? 'unter einer Streckenlast ist M gekrümmt (d²M/dx² = −q)' : want === 1 ? 'ohne Streckenlast ist V konstant, also ist M eine Gerade' : 'dort ist V = 0, also ändert sich M nicht')
+          ? (want === 2 ? 'unter einer Streckenlast ist M gekrümmt (d²M/dx² = −q)' : want === 1 ? 'ohne Streckenlast ist V konstant, also ist M eine Gerade' : zero ? 'dort wirkt kein Moment mehr' : 'dort ist V = 0, also ändert sich M nicht')
           : (want === 0 ? 'ohne Last längs der Achse bleibt N gleich' : 'die Last längs der Achse ändert N stetig');
-      const wantTxt = zero ? `${nm} = 0` : words[want];
-      const gotTxt = ['konstanten', 'geraden', 'gekrümmten'][got];
+      const gotTxt = got === 0 ? 'nahezu konstant' : words[got];
       return [sys
-        ? `Der gezeigte Verlauf ist ${RG(a, b)} ${zero ? 'null' : words[want]} – ${reason}. Dieses System ergäbe dort einen ${gotTxt} Verlauf.`
-        : `${cap(RG(a, b))} (${regionDesc(c, lds)}) ${zero ? `muss ${nm} = 0 sein` : `muss ${nm} ${wantTxt} verlaufen`}, denn ${reason}. Deine Wahl ist dort ${words[got]}.`];
+        ? `Der gezeigte Verlauf ist ${RG(a, b)} ${wantTxt} – ${reason}. Dieses System ergäbe dort einen ${['konstanten', 'geraden', 'gekrümmten'][got]} Verlauf.`
+        : `${cap(RG(a, b))} (${regionDesc(c, lds)}) ${zero ? `muss ${nm} = 0 sein` : `verläuft ${nm} ${wantTxt}`}, denn ${reason}. ${you} ist dort ${gotTxt}.`];
     }
-    // 5) Lage des Extremwerts
+    // 5) Knicke (nur Diagramm): z. B. Einzellast → Knick in M
+    if (!sys && Q !== 'N') {
+      const h = 0.02 * c.L;
+      const slope = (f, s, dir) => (dir > 0 ? f(s + h) - f(s + 0.2 * h) : f(s - 0.2 * h) - f(s - h)) / (0.8 * h);
+      for (const s of cp) {
+        if (s <= 2 * h || s >= c.L - 2 * h) continue;
+        const cf = (x) => c.at(x, Q);
+        const kc = Math.abs(slope(cf, s, 1) - slope(cf, s, -1)) * c.L, kg = Math.abs(slope(g, s, 1) - slope(g, s, -1)) * c.L;
+        if (kc > 0.5 * sc && kg < 0.15 * kc) {
+          return [`Bei ${c.X(s)} (${causesAt(s)}) hat ${nm} einen Knick, weil ${Q === 'M' ? 'V dort springt (dM/dx = V)' : 'sich dort die Streckenlast ändert (dV/dx = −q)'}. ${you} verläuft dort glatt.`];
+        }
+      }
+    }
+    // 6) Vorzeichenbereiche
+    let worst = null;
+    for (const s of ss) {
+      const v = c.at(s, Q), gv = g(s);
+      if (Math.abs(v) > 0.2 * sc && Math.abs(gv) > 0.2 * sc && Math.sign(v) !== Math.sign(gv) && (!worst || Math.abs(v) > Math.abs(c.at(worst, Q)))) worst = s;
+    }
+    if (worst !== null) {
+      const v = c.at(worst, Q);
+      return [sys
+        ? `${cap(P(worst))} ist der gezeigte Verlauf ${v > 0 ? 'positiv' : 'negativ'}, dieses System ergäbe dort das umgekehrte Vorzeichen.`
+        : `${cap(P(worst))} ist ${nm} ${signWord(v)}. ${you} liegt dort auf der anderen Seite.`];
+    }
+    // 7) Lage des Extremwerts
     let sm = ss[0], gm = ss[0];
     for (const s of ss) { if (Math.abs(c.at(s, Q)) > Math.abs(c.at(sm, Q))) sm = s; if (Math.abs(g(s)) > Math.abs(g(gm))) gm = s; }
-    if (Math.abs(sm - gm) > 0.1 * c.L) {
+    if (Math.abs(sm - gm) > 0.1 * c.L && Math.abs(c.at(gm, Q)) < 0.95 * Math.abs(c.at(sm, Q)) && Math.abs(g(sm)) < 0.95 * Math.abs(g(gm))) {
       return [sys
         ? `Im gezeigten Verlauf liegt |${nm}|max ${P(sm)}. Bei diesem System läge es ${P(gm)}.`
-        : `|${nm}|max liegt bei ${c.X(sm)} (${fmt(Math.abs(c.at(sm, Q)))} ${u}). In deiner Wahl liegt es bei ${c.X(gm)}.`];
+        : `|${nm}|max liegt ${P(sm)}${Q === 'M' && Math.abs(c.at(sm, 'V')) < 0.05 * c.scale.V ? ', dort wo V = 0 ist' : ''}. ${you} hat das Maximum ${P(gm)}.`];
     }
-    // 6) größte Abweichung
+    // 8) Nullstellen / Vorzeichenwechsel
+    const zeros = (f) => { const z = []; for (let i = 1; i < ss.length; i++) { const p0 = f(ss[i - 1]), p1 = f(ss[i]); if (Math.abs(p0) > 0.03 * sc && Math.abs(p1) > 0.03 * sc && Math.sign(p0) !== Math.sign(p1)) z.push((ss[i - 1] + ss[i]) / 2); } return z; };
+    const zc = zeros((s) => c.at(s, Q)), zg = zeros(g);
+    for (const z of zc) {
+      if (zg.some((y) => Math.abs(y - z) < 0.08 * c.L)) continue;
+      const hint = Q === 'V' ? ' – dort hat M sein Extremum' : Q === 'M' && c.sys.hinges.some((h) => Math.abs(h - z) < 0.02 * c.L) ? ' – dort sitzt das Gelenk' : '';
+      const near = zg.length ? zg.reduce((m, y) => (Math.abs(y - z) < Math.abs(m - z) ? y : m)) : null;
+      return [sys
+        ? `Der gezeigte Verlauf wechselt ${P(z)} das Vorzeichen${hint}. Dieses System ${near === null ? 'hätte keinen Vorzeichenwechsel' : `wechselt ${P(near)}`}.`
+        : `${nm} wechselt ${P(z)} das Vorzeichen${hint}. ${you} ${near === null ? 'hat gar keinen Vorzeichenwechsel' : `wechselt ${P(near)}`}.`];
+    }
+    if (!sys && zg.length > zc.length) {
+      const extra = zg.find((y) => !zc.some((z) => Math.abs(y - z) < 0.08 * c.L));
+      if (extra !== undefined) return [`${you} wechselt ${P(extra)} das Vorzeichen, der richtige Verlauf ${zc.length ? 'nur an anderer Stelle' : 'bleibt durchgehend ' + signWord(c.at(c.L / 2, Q) || c.at(ss[ss.length >> 2], Q)).split(' ')[0]}.`];
+    }
+    // 9) Proportionen
     let sd = ss[0];
     for (const s of ss) if (Math.abs(g(s) - c.at(s, Q)) > Math.abs(g(sd) - c.at(sd, Q))) sd = s;
-    return [sys
-      ? `Der Verlauf dieses Systems weicht ${P(sd)} deutlich vom gezeigten ab.`
-      : `Bei ${c.X(sd)} ist ${nm} = ${fmt(c.at(sd, Q))} ${u}. ${you} dort ${fmt(g(sd))} ${u}.`];
+    if (sys) return [`Der Verlauf dieses Systems weicht ${P(sd)} deutlich vom gezeigten ab.`];
+    const pc = (v) => Math.round(Math.abs(v) / sc * 100);
+    return [`Die Form ist ähnlich, aber die Proportionen stimmen nicht: ${cap(P(sd))} erreicht ${nm} etwa ${pc(c.at(sd, Q))} % des Größtwerts, deine Wahl zeigt dort etwa ${pc(g(sd))} %.`];
   }
 
   function clickWhy(c, q, sTap) {

@@ -707,7 +707,9 @@
       const opts = ['M', 'V', 'N'].map((h) => ({ fr: g.vars[h].fr, sol: g.vars[h].sol, tag: h === g.fr.hingeType ? 'richtig' : 'gelenk' + h }));
       const L = Math.max(...g.fr.nodes.map((n) => n.x)), xg = g.fr.nodes[g.fr.hingeAt].x;
       const cand = [];
-      for (let x = 1; x < L; x++) if (Math.abs(x - xg) >= 2 && !g.fr.loads.some((l) => l.n !== undefined && Math.abs(g.fr.nodes[l.n].x - x) < EPS)) cand.push(x);
+      // nicht direkt an eine Last (das Symbol läge unter dem Pfeil)
+      const lx = g.fr.loads.map((l) => (l.n !== undefined ? g.fr.nodes[l.n].x : l.type === 'q' ? null : g.fr.nodes[g.fr.members[l.m].a].x + F.geom(g.fr, l.m).e[0] * l.s)).filter((v) => v !== null);
+      for (let x = 1; x < L; x++) if (Math.abs(x - xg) >= 2 && lx.every((v) => Math.abs(v - x) >= 1 - EPS)) cand.push(x);
       const vs = opts.map((o) => norm(beamVec(o.fr, o.sol, qty)));
       if (vs.some((v) => !v)) continue;
       // verschobenes Gelenk: muss einen anderen Verlauf ergeben (in einem unbelasteten Bereich ändert sich oft nichts)

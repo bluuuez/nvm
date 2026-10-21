@@ -81,7 +81,7 @@
   // Normalkraftgelenk: Hülse um den Stab (Sammlung, System 12)
   function releaseMarks(fr, L, compact) {
     let g = '';
-    const k = compact ? 0.75 : 1;
+    const k = compact ? 1 : 1.1;
     fr.members.forEach((m, i) => {
       for (const end of ['A', 'B']) {
         const v = m['relV' + end], n = m['relN' + end];

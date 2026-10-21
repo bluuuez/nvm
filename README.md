@@ -20,7 +20,9 @@ einträgt, schickt Name, Punkte, Level und Zeitpunkt an die Datenbank (Supabase)
   hintereinander; alle fünf richtigen Antworten steigt das Level
 - **Lernen:** Mehrfachauswahl von Schnittgrößen (N, V, M), Aufgaben (Verlauf zum System,
   System zum Verlauf, Maximum antippen, Nullstelle antippen, Werte bestimmen) und Tragwerken,
-  dazu eine Stufe; Erklärung nach jeder Antwort
+  dazu eine Stufe; nach jeder Antwort ein Lösungsweg aus der echten Rechnung (Auflagerkräfte,
+  Verlauf bereichsweise) und bei Fehlern die konkrete Abweichung (Vorzeichen, Randwert, Sprung,
+  Knick, Form)
 
 Stufen: 1 Einstieg (eine Einzel- oder Gleichstreckenlast), 2 Grundlagen (auch Teil-, Dreiecks-,
 Einzel- und Linienmomentlasten), 3 Fortgeschritten (ein bis zwei Lasten, auch schräge und
@@ -57,7 +59,8 @@ Ohne Eintrag in `js/config.js` ist die Bestenliste ausgeblendet.
 
 ## Dateien
 
-- `js/core.js` – Löser, Aufgaben, Fehlerkatalog, Erklärungen
+- `js/core.js` – Löser, Aufgaben, Fehlerkatalog, Merksätze
+- `js/explain.js` – Lösungsweg und Fehlerdiagnose nach jeder Antwort
 - `js/draw.js` – Systeme und Verläufe als SVG
 - `js/app.js` – Oberfläche und Spielablauf
 - `sw.js` – Offline-Modus

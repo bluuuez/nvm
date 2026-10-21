@@ -734,7 +734,7 @@
     }
     const r = pickValues(sys, val, items, ' kN', 'R');
     if (!r) return null;
-    r.solLines = momentEqText(sys, sol, j, names);
+    r.solLines = [`Richtig: ${nm}_v = ${fmt(val)} kN ${val >= 0 ? '(nach oben)' : '– zeigt also nach unten'}. Der Rechenweg steht unten.`];
     r.name = nm;
     return r;
   }
@@ -1027,7 +1027,7 @@
       const perm = randperm(4);
       return {
         sys, opts: perm.map((i) => opts[i]), correct: perm.indexOf(0), text, symbolic: isF,
-        solLines: [`Richtig: ${cor.f}`, ...sl, `Mit den Zahlen aus dem Beispiel: ${cor.f} = ${fmt(cor.v, 2)}${unit}`]
+        solLines: [`Richtig: ${cor.f}`, ...sl, `Mit den Zahlen aus dem Beispiel: ${cor.f} = ${Math.abs(cor.v * 10 - Math.round(cor.v * 10)) < 1e-6 ? fmtN(cor.v) : fmt(cor.v, 2)}${unit}`]
       };
     }
     return null;
@@ -1135,6 +1135,33 @@
     return clusterRanges(tx, L).map((r) => (r[1] - r[0] < 0.02 * L ? `x = ${fmt((r[0] + r[1]) / 2, 2)} m` : `x = ${fmt(r[0], 2)} … ${fmt(r[1], 2)} m`)).join(' oder ');
   }
 
+  // exakte Stelle(n) eines Maximums: an Lastpunkte bzw. an V = 0 anlegen
+  function exactTargets(sys, sol, tgt, Q) {
+    const L = sys.L, cp = critPts(sys), e = 1e-6 * L;
+    const val = (s) => Math.max(Math.abs(sgAt(sol, Math.max(s - e, 0))[Q]), Math.abs(sgAt(sol, Math.min(s + e, L))[Q]));
+    return clusterRanges(tgt, L).map(([a, b]) => {
+      const va = val(a), vb = val(b), vm = val((a + b) / 2), vmax = Math.max(va, vb, vm, 1e-12);
+      if (b - a >= 0.02 * L && Math.abs(va - vb) < 0.005 * vmax && Math.abs(vm - va) < 0.005 * vmax) {
+        const na = cp.find((p) => Math.abs(p - a) < 0.03 * L), nb = cp.filter((p) => Math.abs(p - b) < 0.03 * L).pop();
+        return [na ?? a, nb ?? b];
+      }
+      const inR = tgt.filter((t) => t >= a - 1e-9 && t <= b + 1e-9);
+      const m = inR.reduce((p, t) => (val(t) > val(p) ? t : p), inR[0]);
+      const near = cp.filter((p) => Math.abs(p - m) < 0.03 * L).sort((p, r) => Math.abs(p - m) - Math.abs(r - m))[0];
+      if (near !== undefined && val(near) >= 0.99 * val(m)) return [near, near];
+      if (Q === 'M') {
+        const f = (x) => sgAt(sol, x).V;
+        let x0 = Math.max(m - 0.05 * L, 0), x1 = Math.min(m + 0.05 * L, L);
+        if (f(x0) * f(x1) < 0) {
+          for (let k = 0; k < 50; k++) { const xm = (x0 + x1) / 2; if (f(x0) * f(xm) <= 0) x1 = xm; else x0 = xm; }
+          return [(x0 + x1) / 2, (x0 + x1) / 2];
+        }
+      }
+      return [m, m];
+    });
+  }
+  const rangesText = (rg, ca) => rg.map(([a, b]) => (Math.abs(b - a) < 1e-9 ? `x = ${fmtL(a * ca)} m` : `x = ${fmtL(a * ca)} … ${fmtL(b * ca)} m`)).join(' oder ');
+
   function buildQuestion(level, qty, kind, forceType, cfg) {
     cfg = cfg || { calc: 'rechner', incl: 0 };
     let task = cfg.task || 'mix';
@@ -1211,12 +1238,14 @@
         if (!tgt.length || maxAbs(cv.M) < 1e-6) good = false;
         else {
           q.target = tgt; q.tol = 0.045 * sys.L; q.clickTag = 'klick' + typ.slice(5); if (typ.startsWith('clickV')) q.qty = 'V';
-          if (typ === 'clickMmax') {
-            let im = 0; cv.M.forEach((v, i) => { if (Math.abs(v) > Math.abs(cv.M[im])) im = i; });
-            q.solLines = [`Gesucht war x = ${fmt(cv.xs[im] * sys.ca, 2)} m (|M|max = ${fmt(Math.abs(cv.M[im]))} kNm).`];
-          } else if (typ === 'clickVmax') {
-            let im = 0; cv.V.forEach((v, i) => { if (Math.abs(v) > Math.abs(cv.V[im])) im = i; });
-            q.solLines = ['Gesucht war ' + clusterText(tgt.map((x) => x * sys.ca), sys.L * sys.ca) + ` (|V|max = ${fmt(Math.abs(cv.V[im]))} kN).`];
+          if (typ === 'clickMmax' || typ === 'clickVmax') {
+            const Q = typ === 'clickMmax' ? 'M' : 'V';
+            q.exact = exactTargets(sys, sol, tgt, Q);
+            const ee = 1e-6 * sys.L;
+            const vx = (x) => Math.max(Math.abs(sgAt(sol, Math.max(x - ee, 0))[Q]), Math.abs(sgAt(sol, Math.min(x + ee, sys.L))[Q]));
+            const mx = Math.max(maxAbs(Q === 'M' ? cv.M : cv.V), ...q.exact.flat().map(vx));
+            q.maxVal = mx;
+            q.solLines = ['Gesucht war ' + rangesText(q.exact, sys.ca) + ` (|${Q}|max = ${fmt(mx)} ${Q === 'M' ? 'kNm' : 'kN'}).`];
           } else q.solLines = ['Gesucht war ' + clusterText(tgt.map((x) => x * sys.ca), sys.L * sys.ca) + '.'];
         }
       }
@@ -1246,8 +1275,8 @@
     if (subs.includes('F')) R.push('Einzellast: Sprung in V, Knick in M.');
     if (subs.includes('Fs')) R.push('Schräge Last zerlegen: der Anteil quer zur Stabachse wirkt auf V und M, der Anteil längs auf N.');
     if (subs.includes('H')) R.push('Horizontalkraft: Sprung im N-Verlauf. Nur Festlager bzw. Einspannung nehmen H auf.');
-    if (subs.includes('M')) R.push('Einzelmoment: Sprung in M um M₀, die Querkraft bleibt unverändert.');
-    if (subs.includes('mq')) R.push('Linienmoment m: V bleibt unverändert, M ändert dort seine Steigung, denn dM/dx = V − m (m gegen den Uhrzeigersinn positiv). Ein Sprung in M entsteht nicht.');
+    if (subs.includes('M')) R.push('Einzelmoment: Sprung in M um M₀, V springt dort nicht.');
+    if (subs.includes('mq')) R.push('Linienmoment m: V ändert sich darunter nicht (dV/dx = 0), M ändert seine Steigung, denn dM/dx = V − m (m gegen den Uhrzeigersinn positiv). Ein Sprung in M entsteht nicht.');
     if (incl) {
       R.push('Schräger Stab: jede Last in Komponenten zerlegen. Quer zur Achse wirkt sie auf V und M, längs der Achse auf N.');
       if (sys.loads.some((l) => l.type === 'q' && l.basis === 'proj')) R.push('Last je m Grundriss q: quer q·cos²α, längs q·sinα·cosα (jeweils je m Stab).');
@@ -1260,12 +1289,12 @@
       R.push('Kragarm: Am freien Ende ist M = 0 (ohne Endmoment), an der Einspannung ist |M| am größten' +
         (onlyForces ? ' – bei Lasten von oben Zug oben, also M < 0.' : '; ob Zug oben oder unten, hängt von der Drehrichtung der Lasten ab.'));
     }
-    else if (sys.kind === 'ueber') R.push('Über dem Innenlager entsteht ein negatives Stützmoment (Zug oben), das unbelastete Kragende hat M = 0.');
+    else if (sys.kind === 'ueber') R.push('Über dem Innenlager entsteht ein Stützmoment – bei Lasten von oben negativ (Zug oben). Am freien Kragende ist M = 0 (ohne Endmoment).');
     else if (sys.kind === 'gerber') R.push('Gelenk: Dort ist M = 0. Erst den Einhängeträger lösen, seine Gelenkkraft belastet den Kragträger.');
     else R.push('Gelenkige Endlager: M = 0 an beiden Enden (außer bei einem Einzelmoment direkt am Lager).');
     if (focus === 'V') R.push('V ist die Steigung der Momentenlinie: V = dM/dx. Jedes Auflager ist eine Einzelkraft, also ein Sprung in V.');
     else if (focus === 'N') R.push('N > 0 ist Zug, N < 0 Druck. N ändert sich nur durch Kräfte längs der Stabachse.');
-    else R.push('M ist extremal, wo V = 0 ist bzw. das Vorzeichen wechselt.');
+    else R.push(sys.loads.some((l) => l.type === 'm') ? 'Extremwerte von M liegen, wo dM/dx = V − m das Vorzeichen wechselt – oder am Rand.' : 'Extremwerte von M liegen, wo V = 0 ist bzw. das Vorzeichen wechselt – oder am Rand, etwa an einer Einspannung.');
     return R;
   }
 
@@ -1335,34 +1364,6 @@
     return out;
   }
 
-  const leverStr = (d) => (d >= 0 ? fmtL(d) : `(${fmtL(d)})`);
-  function momentEqText(sys, sol, j, names) {
-    const iv = sol.unk.map((u, i) => i).filter((i) => sol.unk[i].c === 'V');
-    const simple = iv.length === 2 && !sys.hinges.length && !sys.sup.some((s) => s.type === 'einsp') && !isIncl(sys);
-    if (!simple) {
-      const L = sys.hinges.length
-        ? ['Auflagerkräfte aus ΣH = 0, ΣV = 0, ΣM = 0 und der Gelenkbedingung M = 0.', 'Tipp: Zuerst den Einhängeträger (ohne Einspannung) für sich lösen.']
-        : ['Auflagerkräfte aus ΣH = 0, ΣV = 0 und ΣM = 0.'];
-      if (isIncl(sys)) L.push('Beim schrägen Stab: Momente senkrechter Kräfte mit dem waagerechten Abstand (Grundriss) bilden.');
-      return L;
-    }
-    const jA = iv.find((i) => i !== j);
-    const xa = sol.unk[jA].x, xb = sol.unk[j].x;
-    const nmA = names[sol.unk[jA].s], nmB = names[sol.unk[j].s];
-    const terms = [];
-    for (const ld of sys.loads) {
-      if (ld.type === 'F') { if (Math.abs(ld.v) > 1e-9) terms.push(`${fmt(ld.v)}·${leverStr(ld.x - xa)}`); }
-      else if (ld.type === 'q') { const [R, xc] = distRes(ld.x, ld.x2, ld.v, ld.v2); terms.push(`${fmt(R)}·${leverStr(xc - xa)}`); }
-      else if (ld.type === 'm') { const Mt = ld.v * (ld.x2 - ld.x); terms.push(Mt >= 0 ? fmt(Mt) : `(${fmt(Mt)})`); }
-      else terms.push(ld.v >= 0 ? fmt(ld.v) : `(${fmt(ld.v)})`);
-    }
-    const out = [`ΣM um ${nmA} = 0 (Uhrzeigersinn positiv):`, `${nmB}_v · ${leverStr(xb - xa)} = ${terms.join(' + ')}`,
-      `also ${nmB}_v = ${fmt(sol.R[j])} kN`];
-    if (sys.loads.some((l) => l.type === 'q')) out.push('Streckenlasten als Resultierende im Schwerpunkt.');
-    if (sys.loads.some((l) => l.type === 'm')) out.push('Linienmoment: Gesamtmoment m·Länge, ohne Hebelarm.');
-    return out;
-  }
-
   function tagExpl(tag, qty, info = '') {
     switch (tag) {
       case 'vorzeichen':
@@ -1372,17 +1373,23 @@
       case 'verwechselt':
         return qty === 'M' ? 'Das ist der Querkraftverlauf, nicht der Momentenverlauf. Merke: dM/dx = V – die Querkraft ist die Steigung der M-Linie.'
           : 'Das ist der Momentenverlauf. Die Querkraft ist seine Ableitung: V = dM/dx.';
-      case 'linear': return 'Die Werte an den Knickstellen passen, aber unter einer Streckenlast verläuft M nicht geradlinig, sondern als Parabel (d²M/dx² = −q).';
+      case 'linear': if (qty === 'V') return 'Die Werte an den Knickstellen passen, aber unter einer Dreieckslast verläuft V nicht geradlinig, sondern quadratisch (dV/dx = −q).';
+        return 'Die Werte an den Knickstellen passen, aber unter einer Streckenlast verläuft M nicht geradlinig, sondern als Parabel (d²M/dx² = −q).';
       case 'lastGespiegelt': return 'Dieser Verlauf gehört zur gespiegelten Laststellung. Schau genau, wo die Lasten sitzen und wohin sie zeigen.';
-      case 'lagerGespiegelt': return 'So sähe es bei gespiegelter Lagerung aus, zum Beispiel mit der Einspannung bzw. dem Kragarm auf der anderen Seite.';
-      case 'resultierende': return 'Hier wurde die Streckenlast durch ihre Resultierende ersetzt. Für die Auflagerkräfte ist das erlaubt, für den Verlauf nicht: Unter Streckenlast ist V linear und M gekrümmt.';
-      case 'verschmiert': return 'Das wäre der Verlauf unter einer Gleichstreckenlast. Eine Einzellast erzeugt dagegen einen Sprung in V und einen Knick in M.';
+      case 'lagerGespiegelt': return qty === 'N' ? 'So sähe es mit gespiegelter Lagerung aus – das Festlager säße am anderen Ende, und die Längskraft flösse dorthin.'
+        : 'So sähe es bei gespiegelter Lagerung aus, zum Beispiel mit der Einspannung bzw. dem Kragarm auf der anderen Seite.';
+      case 'resultierende': return 'Hier wurde die Streckenlast durch ihre Resultierende ersetzt. Für die Auflagerkräfte ist das erlaubt, für den Verlauf nicht: ' +
+        (qty === 'V' ? 'V springt dann, statt unter der Last stetig abzunehmen.' : qty === 'N' ? 'N springt dann, statt sich stetig zu ändern.' : 'M bekommt einen Knick, statt unter der Last gekrümmt zu verlaufen.');
+      case 'verschmiert': return 'Das wäre der Verlauf unter einer Streckenlast. ' +
+        (qty === 'V' ? 'Eine Einzellast lässt V springen, dazwischen ist V konstant.' : qty === 'N' ? 'Eine Kraft längs der Achse lässt N springen, dazwischen ist N konstant.' : 'Eine Einzellast erzeugt einen Knick in M, dazwischen ist M eine Gerade.');
       case 'momentDreh': return 'Drehsinn des Moments vertauscht: Beim Einzelmoment springt M in die falsche Richtung, beim Linienmoment kippt die Steigung von M andersherum.';
       case 'linienmomentKonz': return 'Hier wurde das Linienmoment durch ein Einzelmoment ersetzt. Das ergibt einen Sprung in M. Ein Linienmoment m ändert dagegen nur die Steigung: dM/dx = V − m, M bleibt stetig.';
       case 'lastFehlt': return `Hier fehlt der Anteil einer Last (${info}). Jede Last trägt zum Verlauf bei – Superposition.`;
-      case 'lastVerschoben': return 'Die Last sitzt hier an der falschen Stelle. Sprünge in V und Knicke in M liegen genau unter Einzellasten.';
+      case 'lastVerschoben': return 'Die Last sitzt hier an der falschen Stelle. ' +
+        (qty === 'V' ? 'Sprünge in V liegen genau unter Einzellasten.' : qty === 'N' ? 'Sprünge in N liegen genau dort, wo eine Kraft längs der Achse angreift.' : 'Knicke in M liegen genau unter Einzellasten.');
       case 'festLos': return 'Hier hat das falsche Lager die Kraft längs des Stabs übernommen. Nur das Festlager nimmt Kräfte in beide Richtungen auf – das entscheidet, wo N wirkt.';
-      case 'gelenkVerschoben': return 'Das Gelenk liegt hier woanders. Am Gelenk muss M = 0 sein – prüf, wo der Verlauf durch null geht.';
+      case 'gelenkVerschoben': return qty === 'V' ? 'Das Gelenk liegt hier woanders. Dadurch verteilen sich die Lasten anders auf die Lager, und die Querkraft ändert sich.'
+        : 'Das Gelenk liegt hier woanders. Am Gelenk muss M = 0 sein – prüf, wo der Verlauf durch null geht.';
       case 'ohneNeigung':
         return qty === 'N' ? 'Das wäre der waagerechte Träger. Beim schrägen Stab erzeugen auch senkrechte Lasten eine Normalkraft – ihre Komponente längs der Stabachse.'
           : 'So sähe es ohne Neigung aus. Beim schrägen Stab wirkt quer zur Achse nur die Komponente F·cos α, und die Abstände entlang der Achse sind länger.';
@@ -1447,20 +1454,22 @@
       case 'lastVerschoben': return 'Das wäre der Wert für eine andere Laststellung.';
       case 'gelenkVerschoben': return 'Das wäre der Wert mit anders liegendem Gelenk.';
       case 'festLos': return 'Fest- und Loslager vertauscht.';
-      case 'faktor2': return 'Doppelt so groß wie richtig – typisch, wenn zum Beispiel qL²/4 statt qL²/8 gerechnet oder der Hebelarm verdoppelt wird.';
+      case 'faktor2': return ctx === 'M' ? 'Doppelt so groß wie richtig – typisch, wenn zum Beispiel qL²/4 statt qL²/8 gerechnet oder der Hebelarm verdoppelt wird.'
+        : 'Doppelt so groß wie richtig – Hebelarm verdoppelt oder die Last nicht auf beide Lager aufgeteilt?';
       case 'halb': return 'Nur halb so groß wie richtig – Hebelarm oder Lastanteil halbiert?';
       case 'faktor15': return 'Um den Faktor 1,5 daneben – Schwerpunkt der Streckenlast oder Hebelarm falsch angesetzt?';
       case 'faktor34': return 'Zu klein – vermutlich Lastanteil oder Hebelarm falsch angesetzt.';
-      case 'andereLager': return 'Das ist die Kraft im anderen Lager – Hebelarme vertauscht? Beim Momentengleichgewicht um A bekommst du direkt B.';
+      case 'andereLager': return 'Das ist die Kraft im anderen Lager – Hebelarme vertauscht? Das Momentengleichgewicht um ein Lager liefert direkt die Kraft im anderen.';
       case 'summe': return 'Das ist die Summe aller Vertikallasten – die teilt sich aber auf die Lager auf.';
       case 'vorzeichenWert': return 'Betrag stimmt, Richtung nicht: Prüf das Vorzeichen im Momentengleichgewicht (positiv = nach oben).';
       case 'kragFormel': return 'Das ist die Formel für den Kragarm. Beim Einfeldträger teilt sich die Last auf zwei Lager auf – das Moment ist kleiner.';
       case 'eftFormel': return 'Das ist die Formel für den Einfeldträger. Beim Kragarm gibt es nur die Einspannung – dort wird das Moment deutlich größer.';
       case 'einspann': return 'Das ist ein Einspannmoment des beidseitig eingespannten Trägers – hier sind die Enden aber gelenkig gelagert.';
-      case 'einheit': return 'Einheit prüfen: Das ist eine Kraft statt eines Moments (oder umgekehrt). Kraft in kN, Moment in kNm.';
+      case 'einheit': return ctx === 'M' ? 'Einheit prüfen: Das ist eine Kraft (kN), gesucht ist aber ein Moment (kNm).' : 'Einheit prüfen: Das ist ein Moment (kNm), gesucht ist aber eine Kraft (kN).';
       case 'mittig': return 'Diese Formel gilt nur, wenn die Last genau in der Mitte steht.';
       case 'hebel': return 'Falscher Hebelarm: Maßgebend ist der Abstand der Last zum betrachteten Punkt, nicht eine andere Länge.';
-      case 'hebelVertauscht': return 'Hebelarme vertauscht: Die Kraft im Lager A hängt vom Abstand der Last zum anderen Lager ab (Momentengleichgewicht um B).';
+      case 'hebelVertauscht': return ctx === 'M' ? 'Hebelarm vertauscht: Für das Moment zählt der Abstand der Last zum Schnitt bzw. zur Einspannung, nicht die Restlänge.'
+        : 'Hebelarme vertauscht: Die Kraft in einem Lager hängt vom Abstand der Last zum anderen Lager ab (Momentengleichgewicht um das andere Lager).';
       case 'dreieck': return 'qL²/6 gehört zur Dreieckslast – hier ist die Last gleichmäßig verteilt.';
       case 'dreieckSchwerpunkt': return 'Schwerpunkt der Dreieckslast verwechselt: Die Resultierende q₀L/2 liegt 1/3 der Länge von der hohen Seite entfernt.';
       case 'rechteck': return 'So wäre es bei einer Gleichstreckenlast – die Dreieckslast hat nur die halbe Resultierende.';
@@ -1476,7 +1485,7 @@
     }
   }
   const TAG_LABELS = {
-    vorzeichen: 'Vorzeichen (Zugseite)', verwechselt: 'M und V verwechselt', linear: 'Gerade statt Parabel',
+    vorzeichen: 'Vorzeichen', verwechselt: 'M und V verwechselt', linear: 'Gerade statt Kurve',
     lastGespiegelt: 'Laststellung gespiegelt', lagerGespiegelt: 'Lagerung verwechselt', resultierende: 'Streckenlast als Einzellast',
     verschmiert: 'Einzellast als Streckenlast', momentDreh: 'Drehsinn des Moments', linienmomentKonz: 'Linienmoment als Einzelmoment', lastFehlt: 'Last vergessen',
     lastVerschoben: 'Laststellung', festLos: 'Fest- und Loslager', gelenkVerschoben: 'Gelenk (M = 0)', ohneNeigung: 'Neigung ignoriert',
@@ -1495,20 +1504,20 @@
   const randomTip = () => pick([
     'Unter einer Gleichstreckenlast ist M eine Parabel und V eine Gerade.',
     'Wo V das Vorzeichen wechselt, hat M sein Extremum.',
-    'Ein Einzelmoment macht einen Sprung in M – V bleibt davon unberührt.',
+    'Ein Einzelmoment macht einen Sprung in M – V springt dort nicht.',
     'Am freien Kragarmende sind M und V null, solange dort keine Last angreift.',
     'Am Gelenk ist M immer null.',
     'Nur das Festlager nimmt Horizontalkräfte auf.',
     'M wird auf der Zugseite angetragen: Zug unten heißt positiv und nach unten gezeichnet.',
     'Einzellast: Sprung in V, Knick in M.',
     'Dreieckslast: V quadratisch, M kubisch.',
-    'Über dem Innenlager eines Kragträgers ist das Moment negativ.',
+    'Über dem Innenlager eines Trägers mit Kragarm ist das Moment bei Lasten von oben negativ.',
     'Einfeldträger mit Gleichstreckenlast: max M = qL²/8.',
     'Kragarm mit Einzellast am Ende: M an der Einspannung = −F·L.',
     'Schräger Stab: Lasten in Komponenten längs und quer zur Stabachse zerlegen.',
     'Schräger Einfeldträger mit Grundrisslast und senkrechten Lagerkräften: max M = q·l²/8 mit l = Grundriss.',
     'Loslager: Die Lagerkraft steht senkrecht zur Gleitebene.',
-    'Linienmoment: V bleibt gleich, M ändert nur seine Steigung (dM/dx = V − m).',
+    'Linienmoment: V ändert sich darunter nicht, M ändert nur seine Steigung (dM/dx = V − m).',
     'Einfeldträger mit konstantem Linienmoment: M = 0 im ganzen Träger.',
     'Kragarm mit Linienmoment: V = 0, M linear bis m·L an der Einspannung.'
   ]);
@@ -1523,9 +1532,9 @@
   const RULES = [
     { title: 'Vorzeichen', lines: ['x zeigt nach rechts, z nach unten, die gestrichelte Faser liegt auf der +z-Seite.', 'N > 0 ist Zug, N < 0 Druck.', 'V > 0 zeigt am positiven Schnittufer in +z-Richtung, also nach unten.', 'M > 0 heißt Zug an der gestrichelten Faser (unten).', 'Alle Schnittgrößen werden positiv zur gestrichelten Faser hin angetragen.'] },
     { title: 'Differentialbeziehungen', lines: ['dN/dx = −n, dV/dx = −q, dM/dx = V − m', 'n, q: Streckenlasten längs und quer; m: Linienmoment (gegen den Uhrzeigersinn positiv)', 'q = 0: V konstant, M linear', 'q konstant: V linear, M quadratische Parabel', 'q linear (Dreieck): V quadratische, M kubische Parabel', 'n konstant: N linear', 'm konstant: V unverändert, M ändert seine Steigung um −m', 'M ist extremal, wo dM/dx = V − m = 0 ist.'] },
-    { title: 'Sprünge und Knicke', lines: ['Einzellast quer: Sprung in V um die Last, Knick in M', 'Einzellast längs: Sprung in N', 'Einzelmoment M₀: Sprung in M um M₀, V unverändert', 'Linienmoment: kein Sprung, nur andere Steigung in M', 'Auflager = Einzelkraft: Sprung in V', 'Gelenk: M = 0; Knick in M nur, wenn am Gelenk eine Einzellast angreift'] },
+    { title: 'Sprünge und Knicke', lines: ['Einzellast quer: Sprung in V um die Last, Knick in M', 'Einzellast längs: Sprung in N', 'Einzelmoment M₀: Sprung in M um M₀, kein Sprung in V', 'Linienmoment: kein Sprung, nur andere Steigung in M', 'Auflager = Einzelkraft: Sprung in V', 'Gelenk: M = 0; Knick in M nur, wenn am Gelenk eine Einzellast angreift'] },
     { title: 'Randbedingungen', lines: ['Freies Ende ohne Last: N = V = M = 0', 'Gelenkiges Endlager: M = 0', 'Einspannung: M ≠ 0, meist der Extremwert', 'Gelenk im Träger: M = 0', 'Festlager nimmt H auf, Loslager nicht'] },
-    { title: 'Schräge Stäbe', lines: ['Lasten zerlegen: quer zur Achse wirken sie auf V und M, längs der Achse auf N.', 'Punktlast F senkrecht: quer F·cos α, längs F·sin α', 'Last je m Grundriss q: quer q·cos²α, längs q·sinα·cosα (je m Stab)', 'Eigengewicht g je m Stab: quer g·cos α, längs g·sin α', 'Senkrechte Lagerkräfte: max M = q·l²/8 mit l = Grundriss', 'Eigenlast, Festlager unten: N₁ = −A_z·sin α, N₂ = B_z·sin α', 'Loslager: Lagerkraft ⊥ Gleitebene – sie entscheidet, wo N wirkt.'] },
+    { title: 'Schräge Stäbe', lines: ['Lasten zerlegen: quer zur Achse wirken sie auf V und M, längs der Achse auf N.', 'Punktlast F senkrecht: quer F·cos α, längs F·sin α', 'Last je m Grundriss q: quer q·cos²α, längs q·sinα·cosα (je m Stab)', 'Eigengewicht g je m Stab: quer g·cos α, längs g·sin α', 'Senkrechte Lagerkräfte: max M = q·l²/8 mit l = Grundriss', 'Eigenlast, Festlager unten: N am unteren Ende = −A_v·sin α, am oberen Ende = +B_v·sin α', 'Loslager: Lagerkraft ⊥ Gleitebene – sie entscheidet, wo N wirkt.'] },
     { title: 'Standardfälle', lines: ['Einfeldträger, q: A = B = qL/2, max M = qL²/8', 'Einfeldträger, F mittig: max M = FL/4', 'Einfeldträger, F bei a: A = F·b/L, max M = F·a·b/L', 'Einfeldträger, Einzelmoment: |A| = |B| = M₀/L', 'Einfeldträger, Dreieck 0 bis q₀: A = q₀L/6, B = q₀L/3, max M = q₀L²/(9√3) bei x = 0,577·L', 'Einfeldträger, Linienmoment m: |A| = |B| = m, M = 0', 'Kragarm, F am Ende: M = −F·L', 'Kragarm, q: M = −qL²/2', 'Kragarm, Dreieck hoch an der Einspannung: M = −q₀L²/6', 'Kragarm, Dreieck hoch am freien Ende: M = −q₀L²/3', 'Kragarm, Linienmoment m: |M| = m·L, V = 0', 'Kragarm-Überstand a mit q: Stützmoment −qa²/2'] },
     { title: 'Vorgehen', lines: ['Auflagerkräfte aus ΣH = 0, ΣV = 0, ΣM = 0 (und M = 0 am Gelenk)', 'Bereiche zwischen Lasten und Lagern festlegen', 'Im Bereich schneiden, Gleichgewicht am Teilsystem', 'Werte an den Bereichsgrenzen und Extremwerte eintragen', 'Kontrolle: Sprünge, Knicke, Randbedingungen'] }
   ];

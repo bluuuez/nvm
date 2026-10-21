@@ -64,22 +64,73 @@
       `<polygon points="${p.map((q) => r1(q[0]) + ',' + r1(q[1])).join(' ')}"/></g>`;
   }
 
-  // Beschriftungen gegen Überlappung nach oben schieben
-  function makeLabeler(dy) {
-    const boxes = [];
-    return function place(x, y, s, size, anchor) {
-      const w = s.length * size * 0.56;
-      const x0 = anchor === 'middle' ? x - w / 2 : anchor === 'end' ? x - w : x;
-      let yy = y;
-      for (let g = 0; g < 8; g++) {
-        const hit = boxes.some((b) => x0 < b.x1 + 6 && x0 + w > b.x0 - 6 && yy > b.y - size - 2 && yy - size < b.y + 2);
-        if (!hit) break;
-        yy -= dy;
+  // Beschriftungen platzieren: weicht anderen Beschriftungen, Pfeilen, Stab, Lagern und dem Bildrand aus.
+  // Es werden mehrere Kandidaten (z. B. über, links, rechts vom Pfeil) probiert, erst danach nach oben geschoben.
+  const texWidth = (s, size) => String(s).replace(/[_{}\\]/g, '').length * size * 0.54;
+  function segRect(x0, y0, x1, y1, r) {
+    let t0 = 0, t1 = 1;
+    const dx = x1 - x0, dy = y1 - y0;
+    const P = [-dx, dx, -dy, dy], Q = [x0 - r[0], r[2] - x0, y0 - r[1], r[3] - y0];
+    for (let i = 0; i < 4; i++) {
+      if (Math.abs(P[i]) < 1e-12) { if (Q[i] < 0) return false; } else {
+        const t = Q[i] / P[i];
+        if (P[i] < 0) { if (t > t1) return false; if (t > t0) t0 = t; } else { if (t < t0) return false; if (t < t1) t1 = t; }
       }
-      boxes.push({ x0, x1: x0 + w, y: yy });
-      return yy;
-    };
+    }
+    return true;
   }
+  function makeLabeler(dy, W = 1e9, H = 1e9) {
+    const boxes = [], segs = [], reqs = [];
+    const rectOf = (x, y, s, size, anchor) => {
+      const w = texWidth(s, size), x0 = anchor === 'middle' ? x - w / 2 : anchor === 'end' ? x - w : x;
+      return [x0, y - size * 0.8, x0 + w, y + size * 0.2];
+    };
+    const free = (r, pad = 3) => {
+      const q = [r[0] - pad, r[1] - pad, r[2] + pad, r[3] + pad];
+      if (r[0] < 2 || r[2] > W - 2 || r[1] < 2 || r[3] > H - 2) return false;
+      if (boxes.some((b) => q[0] < b[2] && q[2] > b[0] && q[1] < b[3] && q[3] > b[1])) return false;
+      return !segs.some((g) => segRect(g[0], g[1], g[2], g[3], q));
+    };
+    const api = {
+      seg(x0, y0, x1, y1) { segs.push([x0, y0, x1, y1]); },
+      box(x0, y0, x1, y1) { boxes.push([Math.min(x0, x1), Math.min(y0, y1), Math.max(x0, x1), Math.max(y0, y1)]); },
+      text(x, y, s, size, anchor) { boxes.push(rectOf(x, y, s, size, anchor)); },
+      // Wunsch merken, aufgelöst wird erst, wenn alle Hindernisse bekannt sind
+      req(cands, s, size, cls) { reqs.push({ cands, s, size, cls }); },
+      resolve() {
+        let out = '';
+        for (const { cands, s, size, cls } of reqs) {
+          let pick = null;
+          for (let k = 0; k <= 6 && !pick; k++) {
+            for (const c of cands) {
+              const y = c.y - k * dy * (c.dir ?? 1), r = rectOf(c.x, y, s, size, c.anchor);
+              if (free(r)) { pick = { x: c.x, y, anchor: c.anchor, r }; break; }
+            }
+          }
+          if (!pick) {          // Notlösung: Stelle mit den wenigsten Überschneidungen, auch nach unten
+            let best = Infinity;
+            for (const c of cands) {
+              for (let k = -6; k <= 6; k++) {
+                const y = c.y - k * dy * 0.5, r = rectOf(c.x, y, s, size, c.anchor);
+                const q = [r[0] - 2, r[1] - 2, r[2] + 2, r[3] + 2];
+                let pen = Math.abs(k) * 0.05;
+                if (r[0] < 2 || r[2] > W - 2 || r[1] < 2 || r[3] > H - 2) pen += 50;
+                pen += 4 * boxes.filter((b) => q[0] < b[2] && q[2] > b[0] && q[1] < b[3] && q[3] > b[1]).length;
+                pen += segs.filter((g) => segRect(g[0], g[1], g[2], g[3], q)).length;
+                if (pen < best) { best = pen; pick = { x: c.x, y, anchor: c.anchor, r }; }
+              }
+            }
+          }
+          boxes.push(pick.r);
+          out += text(pick.x, pick.y, s, cls, size, pick.anchor);
+        }
+        return out;
+      }
+    };
+    return api;
+  }
+  // Pfeil als Hindernis eintragen und zeichnen
+  const arrowL = (lab, x0, y0, x1, y1, cls, head, width) => { lab.seg(x0, y0, x1, y1); return arrow(x0, y0, x1, y1, cls, head, width); };
 
   // Lagersymbole wie in Statik 1 (TUM): Gelenkpunkt, Dreieck, darunter
   //   Festlager – Grundlinie mit Schraffur, Loslager – Doppellinie (Gleitebene), Einspannung – Wand mit Schraffur.
@@ -227,7 +278,7 @@
     const X = (s) => X0 + s * kx;
     const fs = narrow ? 17 : 15, fsS = sym ? fs + 3 : fs;
     const aLen = compact ? 44 : 60, head = compact ? 9 : 11, qMax = compact ? 46 : 58, rM = compact ? 14 : 18;
-    const place = makeLabeler(fs + 3);
+    const lab = makeLabeler(fs + 3, W, H);
     let g = '', front = '';
     const loads = sys.loads;
     const qs = loads.filter((l) => l.type === 'q');
@@ -239,29 +290,33 @@
       const xa = X(ld.x), xb = X(ld.x2);
       g += `<polygon points="${r1(xa)},${r1(y0)} ${r1(xb)},${r1(y0)} ${r1(xb)},${r1(y0 - h2)} ${r1(xa)},${r1(y0 - h1)}" class="sv-qfill"/>`;
       g += line(xa, y0 - h1, xb, y0 - h2, 'sv-load-line');
+      lab.seg(xa, y0 - h1, xb, y0 - h2); lab.seg(xa, y0, xa, y0 - h1); lab.seg(xb, y0, xb, y0 - h2);
       const na = Math.max(3, Math.round((ld.x2 - ld.x) / L * 16) + 1);
       for (let i = 0; i < na; i++) {
         const t = i / (na - 1), xx = xa + (xb - xa) * t, hh = h1 + (h2 - h1) * t;
-        if (hh > 14) g += arrow(xx, y0 - hh, xx, y0, 'sv-load', head * 0.75, 1.3);
+        if (hh > 14) g += arrowL(lab, xx, y0 - hh, xx, y0, 'sv-load', head * 0.75, 1.3);
       }
       const qm = Math.max(Math.abs(ld.v), Math.abs(ld.v2));
       const nm = ld.sub === 'tri' ? 'q_0' : 'q';
       const s = sym ? nm : `${nm} = ${fmtN(qm)} kN/m`;
-      let xl = (xa + xb) / 2, anc = 'middle';
-      if (ld.sub === 'tri') { if (Math.abs(ld.v2) >= Math.abs(ld.v)) { xl = xb; anc = 'end'; } else { xl = xa; anc = 'start'; } }
-      const yl = place(xl, y0 - Math.max(h1, h2) - 7, s, fsS, anc);
-      front += text(xl, yl, s, 'sv-load-text', fsS, anc);
+      const yl = y0 - Math.max(h1, h2) - 7;
+      let cands = [{ x: (xa + xb) / 2, y: yl, anchor: 'middle' }, { x: xa, y: yl, anchor: 'start' }, { x: xb, y: yl, anchor: 'end' }];
+      if (ld.sub === 'tri') cands = Math.abs(ld.v2) >= Math.abs(ld.v) ? [{ x: xb, y: yl, anchor: 'end' }, { x: xb, y: yl, anchor: 'middle' }] : [{ x: xa, y: yl, anchor: 'start' }, { x: xa, y: yl, anchor: 'middle' }];
+      lab.req(cands, s, fsS, 'sv-load-text');
     }
     g += beamSvg(X0, yb, X1, yb, compact);
+    lab.seg(X0, yb, X1, yb); lab.seg(X0, yb + FIB(compact), X1, yb + FIB(compact));
 
     for (const ld of loads.filter((l) => l.type === 'F')) {
       const xp = X(ld.x);
       if (Math.abs(ld.v) < 1e-12) {
-        const dir = Math.sign(ld.Fx), yH = yb - 11, tail = xp - dir * (aLen - 4);
-        g += arrow(tail, yH, xp, yH, 'sv-load', head, 2.2);
+        // liegt die Kraft unter einer Streckenlast, den Pfeil unter den Stab setzen, sonst geht er im Lastblock unter
+        const below = qs.some((lq) => ld.x > lq.x - 1e-9 && ld.x < lq.x2 + 1e-9);
+        const dir = Math.sign(ld.Fx), yH = below ? yb + FIB(compact) + 11 : yb - 11, tail = xp - dir * (aLen - 4);
+        g += arrowL(lab, tail, yH, xp, yH, 'sv-load', head, 2.2);
         const s = sym ? 'H' : `H = ${fmtN(Math.abs(ld.Fx))} kN`;
-        const yl = place((tail + xp) / 2, yH - 7, s, fs, 'middle');
-        front += text((tail + xp) / 2, yl, s, 'sv-load-text', fs);
+        lab.req(below ? [{ x: (tail + xp) / 2, y: yH + fs + 3, anchor: 'middle', dir: -1 }, { x: tail - dir * 6, y: yH + 5, anchor: dir > 0 ? 'end' : 'start', dir: -1 }, { x: xp + dir * 8, y: yH + 5, anchor: dir > 0 ? 'start' : 'end', dir: -1 }]
+          : [{ x: (tail + xp) / 2, y: yH - 7, anchor: 'middle' }, { x: tail - dir * 6, y: yH + 5, anchor: dir > 0 ? 'end' : 'start' }], s, fs, 'sv-load-text');
       } else {
         const n = Math.hypot(ld.Fx, ld.v), ux = ld.Fx / n, uy = ld.v / n;
         let len = aLen;
@@ -272,18 +327,18 @@
           }
         }
         const tx = xp - ux * len, ty = y0 - uy * len;
-        g += arrow(tx, ty, xp, y0, 'sv-load', head, 2.4);
+        g += arrowL(lab, tx, ty, xp, y0, 'sv-load', head, 2.4);
         const s = sym ? 'F' : ld.sub === 'Fs' ? `F = ${fmtN(ld.mag)} kN, ${Math.round(ld.ang)}°` : `F = ${fmtN(ld.v)} kN`;
-        const yl = place(tx, ty - 6, s, fsS, 'middle');
-        front += text(tx, yl, s, 'sv-load-text', fsS);
+        lab.req([{ x: tx, y: ty - 6, anchor: 'middle' }, { x: tx - 7, y: ty + 6, anchor: 'end' }, { x: tx + 7, y: ty + 6, anchor: 'start' }], s, fsS, 'sv-load-text');
       }
     }
     for (const ld of loads.filter((l) => l.type === 'M')) {
       const xp = X(ld.x);
       g += momentArc(xp, yb, rM, ld.v > 0, 'sv-load', head * 0.85);
+      lab.box(xp - rM - 2, yb - rM - 2, xp + rM + 2, yb + rM + 2);
       const s = sym ? 'M_0' : `M = ${fmtN(Math.abs(ld.v))} kNm`;
-      const yl = place(xp, yb - rM - 7, s, fsS, 'middle');
-      front += text(xp, yl, s, 'sv-load-text', fsS);
+      lab.req([{ x: xp, y: yb - rM - 7, anchor: 'middle' }, { x: xp + rM + 4, y: yb - rM, anchor: 'start' }, { x: xp - rM - 4, y: yb - rM, anchor: 'end' },
+        { x: xp, y: yb + rM + fsS + 2, anchor: 'middle', dir: -1 }], s, fsS, 'sv-load-text');
     }
     // Linienmoment: Band mit kleinen Drehpfeilen über dem Träger (über einer Streckenlast gestapelt)
     for (const ld of loads.filter((l) => l.type === 'm')) {
@@ -297,18 +352,23 @@
       }
       const bh = compact ? 20 : 26, yt = top - bh - 3, yc = yt + bh / 2;
       g += `<rect x="${r1(xa)}" y="${r1(yt)}" width="${r1(xb - xa)}" height="${bh}" class="sv-mband"/>`;
+      lab.box(xa, yt, xb, yt + bh);
       const r = compact ? 6 : 8, nA = Math.max(2, Math.round((xb - xa) / (compact ? 24 : 34)));
       for (let i = 0; i < nA; i++) g += momentArc(xa + (i + 0.5) * (xb - xa) / nA, yc, r, ld.v > 0, 'sv-load', compact ? 4.5 : 5.5);
       const s = sym ? 'm' : `m = ${fmtN(Math.abs(ld.v))} kNm/m`;
-      const yl = place((xa + xb) / 2, yt - 6, s, fsS, 'middle');
-      front += text((xa + xb) / 2, yl, s, 'sv-load-text', fsS);
+      lab.req([{ x: (xa + xb) / 2, y: yt - 6, anchor: 'middle' }], s, fsS, 'sv-load-text');
     }
-    sys.sup.forEach((sp) => { g += support(X(sp.x), yb, sp.type, 0, sp.x <= L / 2 ? -1 : 1, compact, 1, sp.x < 1e-9 || sp.x > L - 1e-9); });
+    sys.sup.forEach((sp) => {
+      const atEnd = sp.x < 1e-9 || sp.x > L - 1e-9;
+      g += support(X(sp.x), yb, sp.type, 0, sp.x <= L / 2 ? -1 : 1, compact, 1, atEnd);
+      const d = supDepth(sp.type, compact, atEnd), xp = X(sp.x);
+      if (sp.type === 'einsp') lab.box(xp - 24, yb - 26, xp + 24, yb + 26); else lab.box(xp - 16, yb, xp + 16, yb + d + 2);
+    });
     for (const h of sys.hinges) g += `<circle cx="${r1(X(h))}" cy="${yb}" r="${compact ? 4.5 : 6}" class="sv-hinge"/>`;
 
     if (!compact) {
       const names = supNames(sys);
-      sys.hinges.forEach((h) => { front += text(X(h), yb + 26, 'G', 'sv-name-soft', 13); });
+      sys.hinges.forEach((h) => { front += text(X(h), yb + 26, 'G', 'sv-name-soft', 13); lab.text(X(h), yb + 26, 'G', 13, 'middle'); });
       // Bemaßung
       const tickLine = (a, b, yd) => line(a, yd, b, yd, 'sv-dim') + dimTick(a, yd) + dimTick(b, yd);
       if (sym && sys.symDims && sys.symDims.length) {
@@ -316,10 +376,12 @@
           const yd = 238 + (d.row - 1) * 28, a = X(d.x1), b = X(d.x2);
           g += tickLine(a, b, yd);
           front += text((a + b) / 2, yd - 7, d.label, 'sv-dim-sym', fs + 3);
+          lab.box(a, yd - 7 - fs, b, yd + 4);
         }
       } else {
-        const yd = sol ? 262 : 244, kp = critPts(sys);
+        const yd = sol ? 270 : 244, kp = critPts(sys);
         g += line(X0, yd, X1, yd, 'sv-dim');
+        lab.box(X0, yd - 7 - fs, X1, yd + 4);
         for (const k of kp) g += dimTick(X(k), yd);
         for (let i = 0; i < kp.length - 1; i++) {
           const len = kp[i + 1] - kp[i];
@@ -328,7 +390,9 @@
         front += text(X1 + 10, yd + 4, '[m]', 'sv-dim-text', fs - 3, 'start');
       }
       front += text(14, 24, sys.name, 'sv-title', fs - 1, 'start');
+      lab.text(14, 24, sys.name, fs - 1, 'start');
       g += axesSvg(W - (narrow ? 64 : 74), 18);
+      lab.box(W - (narrow ? 64 : 74) - 4, 10, W - 4, 56);
       // Lagerbezeichnungen bzw. Lagerreaktionen
       sys.sup.forEach((sp, i) => {
         const xp = X(sp.x);
@@ -337,13 +401,20 @@
         const depth = supDepth(sp.type, compact, !!end);
         if (sol) {
           g += reactionArrows(sys, sol, i, [xp, yb], sp, { compact, inward: [end > 0 ? -1 : 1, 0], end, side, rot: 0 });
+          lab.box(xp - 4, yb + depth, xp + 4, yb + depth + 34);
           const lines = reactionLines(sys, sol, i, names);
-          lines.forEach((t, k) => { front += text(xp + side * 14, yb + depth + 16 + k * (fs + 1), t, 'sv-react', fs - 2, side > 0 ? 'start' : 'end'); });
+          lines.forEach((t, k) => {
+            const ty = yb + depth + 16 + k * (fs + 1), anc = side > 0 ? 'start' : 'end';
+            front += text(xp + side * 14, ty, t, 'sv-react', fs - 2, anc);
+            lab.text(xp + side * 14, ty, t, fs - 2, anc);
+          });
         } else {
           front += text(xp, yb + depth + 22, names[i], 'sv-name', fs);
+          lab.text(xp, yb + depth + 22, names[i], fs, 'middle');
         }
       });
     }
+    front += lab.resolve();
     return {
       svg: `<svg viewBox="0 0 ${W} ${H}" class="sv sv-system" role="img" aria-label="${esc(sys.name)}">${g}${front}</svg>`,
       map: { ox: X0, k: kx, L, W, H }
@@ -368,7 +439,7 @@
     const P = (s) => [ox + s * ca * ux, oy - s * sa * uy];
     const fs = 15, fsS = sym ? 18 : 15;
     const aLen = compact ? 40 : 54, head = compact ? 9 : 11, qMax = compact ? 30 : 42, rM = compact ? 13 : 17;
-    const place = makeLabeler(fs + 3);
+    const lab = makeLabeler(fs + 3, W, H);
     let g = '', front = '';
     const loads = sys.loads, qs = loads.filter((l) => l.type === 'q');
     const qmax = qs.length ? Math.max(...qs.map((l) => Math.max(Math.abs(l.v), Math.abs(l.v2)))) : 1;
@@ -379,31 +450,38 @@
       const A = P(ld.x), B = P(ld.x2);
       g += `<polygon points="${r1(A[0])},${r1(A[1] - lift)} ${r1(B[0])},${r1(B[1] - lift)} ${r1(B[0])},${r1(B[1] - lift - h2)} ${r1(A[0])},${r1(A[1] - lift - h1)}" class="sv-qfill"/>`;
       g += line(A[0], A[1] - lift - h1, B[0], B[1] - lift - h2, 'sv-load-line');
+      lab.seg(A[0], A[1] - lift - h1, B[0], B[1] - lift - h2); lab.seg(A[0], A[1] - lift, A[0], A[1] - lift - h1); lab.seg(B[0], B[1] - lift, B[0], B[1] - lift - h2);
       const na = Math.max(3, Math.round((ld.x2 - ld.x) / L * 12) + 1);
       for (let i = 0; i < na; i++) {
         const t = i / (na - 1), s = ld.x + (ld.x2 - ld.x) * t, p = P(s), hv = h1 + (h2 - h1) * t;
-        if (hv > 14) g += arrow(p[0], p[1] - lift - hv, p[0], p[1] - lift, 'sv-load', head * 0.75, 1.3);
+        if (hv > 14) g += arrowL(lab, p[0], p[1] - lift - hv, p[0], p[1] - lift, 'sv-load', head * 0.75, 1.3);
       }
       const qm = Math.max(Math.abs(ld.v), Math.abs(ld.v2));
       let nm = ld.basis === 'proj' ? 'q' : 'g';
       if (ld.sub === 'tri') nm += '_0';
       const suf = ld.basis === 'proj' ? ' (Grundriss)' : ' (je m Stab)';
       const s = sym ? nm : compact ? `${nm} = ${fmtN(qm)}` : `${nm} = ${fmtN(qm)} kN/m${suf}`;
-      const pm = P(hh >= 0 ? ld.x2 : ld.x);
-      const yl = place(pm[0], pm[1] - lift - Math.max(h1, h2) - 8, s, fsS, 'middle');
-      front += text(pm[0], yl, s, 'sv-load-text', fsS);
+      // über das höhere Ende des Lastblocks (dort, wo er am weitesten hinaufreicht)
+      const topA = A[1] - lift - h1, topB = B[1] - lift - h2;
+      const pt = topA <= topB ? [A[0], topA] : [B[0], topB], pm = [(A[0] + B[0]) / 2, Math.min(topA, topB)];
+      lab.req([{ x: pt[0], y: pt[1] - 8, anchor: 'middle' }, { x: pt[0], y: pt[1] - 8, anchor: topA <= topB ? 'start' : 'end' }, { x: pm[0], y: pm[1] - 8, anchor: 'middle' }], s, fsS, 'sv-load-text');
     }
     const p0 = P(0), p1 = P(L);
     g += beamSvg(p0[0], p0[1], p1[0], p1[1], compact);
+    lab.seg(p0[0], p0[1], p1[0], p1[1]); lab.seg(p0[0], p0[1] + FIB(compact), p1[0], p1[1] + FIB(compact));
 
     for (const ld of loads.filter((l) => l.type === 'F')) {
       const pp = P(ld.x);
       if (Math.abs(ld.v) < 1e-12) {
-        const dir = Math.sign(ld.Fx), yH = pp[1] - 11, tail = pp[0] - dir * (aLen - 4);
-        g += arrow(tail, yH, pp[0], yH, 'sv-load', head, 2.2);
+        const below = qs.some((lq) => ld.x > lq.x - 1e-9 && ld.x < lq.x2 + 1e-9);
+        const dir = Math.sign(ld.Fx), tail = pp[0] - dir * (aLen - 4);
+        // unter dem Stab: Pfeil auf Höhe der Faser unterhalb des Lastpunkts (Stab ist geneigt, also tiefer ansetzen)
+        const yH = below ? Math.max(pp[1], P(Math.min(Math.max((tail - ox) / (ca * ux), 0), L))[1]) + FIB(compact) + 12 : pp[1] - 11;
+        g += arrowL(lab, tail, yH, pp[0], yH, 'sv-load', head, 2.2);
+        if (below) { g += line(pp[0], pp[1] + FIB(compact), pp[0], yH, 'sv-dim', 'stroke-dasharray="2 2"'); }
         const s = sym ? 'H' : `H = ${fmtN(Math.abs(ld.Fx))} kN`;
-        const yl = place((tail + pp[0]) / 2, yH - 7, s, fs, 'middle');
-        front += text((tail + pp[0]) / 2, yl, s, 'sv-load-text', fs);
+        lab.req(below ? [{ x: (tail + pp[0]) / 2, y: yH + fs + 3, anchor: 'middle', dir: -1 }, { x: tail - dir * 6, y: yH + 5, anchor: dir > 0 ? 'end' : 'start', dir: -1 }, { x: pp[0] + dir * 8, y: yH + 5, anchor: dir > 0 ? 'start' : 'end', dir: -1 }]
+          : [{ x: (tail + pp[0]) / 2, y: yH - 7, anchor: 'middle' }, { x: tail - dir * 6, y: yH + 5, anchor: dir > 0 ? 'end' : 'start' }], s, fs, 'sv-load-text');
       } else {
         const n = Math.hypot(ld.Fx, ld.v), uxv = ld.Fx / n, uyv = ld.v / n;
         let len = aLen;
@@ -428,25 +506,28 @@
           if (tl[1] < yq - 12) break;
           len += 14; tl = [tip[0] - uxv * len, tip[1] - uyv * len];
         }
-        g += arrow(tl[0], tl[1], tip[0], tip[1], 'sv-load', head, 2.4);
+        g += arrowL(lab, tl[0], tl[1], tip[0], tip[1], 'sv-load', head, 2.4);
         const s = sym ? 'F' : ld.sub === 'Fs' ? `F = ${fmtN(ld.mag)} kN, ${Math.round(ld.ang)}°` : `F = ${fmtN(ld.v)} kN`;
-        const yl = place(tl[0], tl[1] - 6, s, fsS, 'middle');
-        front += text(tl[0], yl, s, 'sv-load-text', fsS);
+        lab.req([{ x: tl[0], y: tl[1] - 6, anchor: 'middle' }, { x: tl[0] - 7, y: tl[1] + 6, anchor: 'end' }, { x: tl[0] + 7, y: tl[1] + 6, anchor: 'start' }], s, fsS, 'sv-load-text');
       }
     }
     for (const ld of loads.filter((l) => l.type === 'M')) {
       const pp = P(ld.x);
       g += momentArc(pp[0], pp[1], rM, ld.v > 0, 'sv-load', head * 0.85);
+      lab.box(pp[0] - rM - 2, pp[1] - rM - 2, pp[0] + rM + 2, pp[1] + rM + 2);
       const s = sym ? 'M_0' : `M = ${fmtN(Math.abs(ld.v))} kNm`;
-      const yl = place(pp[0], pp[1] - rM - 7, s, fsS, 'middle');
-      front += text(pp[0], yl, s, 'sv-load-text', fsS);
+      lab.req([{ x: pp[0], y: pp[1] - rM - 7, anchor: 'middle' }, { x: pp[0], y: pp[1] + rM + fsS + 2, anchor: 'middle', dir: -1 },
+        { x: pp[0] + rM + 4, y: pp[1] + rM + 4, anchor: 'start', dir: -1 }, { x: pp[0] - rM - 4, y: pp[1] + rM + 4, anchor: 'end', dir: -1 }], s, fsS, 'sv-load-text');
     }
     const aApp = Math.atan2(hh * uy, lh * ux) * 180 / Math.PI;   // sichtbarer Winkel
     sys.sup.forEach((sp) => {
       const p = P(sp.x);
       const rot = sp.type === 'losN' || sp.type === 'einsp' ? -aApp : 0;
       const fib = rot ? 1 : 1 / Math.max(0.3, Math.cos(aApp * Math.PI / 180));
-      g += support(p[0], p[1], sp.type, rot, sp.x <= L / 2 ? -1 : 1, compact, fib, sp.x < 1e-9 || sp.x > L - 1e-9);
+      const atEnd = sp.x < 1e-9 || sp.x > L - 1e-9;
+      g += support(p[0], p[1], sp.type, rot, sp.x <= L / 2 ? -1 : 1, compact, fib, atEnd);
+      const d = supDepth(sp.type, compact, atEnd);
+      if (sp.type === 'einsp') lab.box(p[0] - 26, p[1] - 26, p[0] + 26, p[1] + 26); else lab.box(p[0] - 17, p[1] - 6, p[0] + 17, p[1] + d + 4);
     });
 
     if (!compact) {
@@ -458,22 +539,29 @@
         const rot = sp.type === 'losN' || sp.type === 'einsp' ? -aApp : 0;
         if (sol) {
           g += reactionArrows(sys, sol, i, p, sp, { compact, inward: ow < 0 ? bu : [-bu[0], -bu[1]], end: ow, side: ow, rot });
+          lab.box(p[0] - 4, p[1], p[0] + 4, p[1] + supDepth(sp.type, compact, true) + 36);
           // Werte neben den Pfeil; bei einer Einspannung am unteren Ende auf die Innenseite (unter den Stab)
           const low = p[1] >= Math.max(p0[1], p1[1]) - 1e-6;
           // Gelenklager am hohen Ende: Werte mittig unter den Pfeil, damit sie nicht in die Höhenbemaßung laufen
           let sd = ow, y0 = p[1] + 48, dx = 16;
-          if (sp.type === 'einsp') { y0 = p[1] + 26; if (low) sd = -ow; else y0 = p[1] + 44; } else if (!low) { sd = 0; y0 = p[1] + supDepth(sp.type, compact, true) + 48; dx = 0; }
-          reactionLines(sys, sol, i, names).forEach((t, k) => { front += text(p[0] + sd * dx, y0 + k * 15, t, 'sv-react', 13, sd < 0 ? 'end' : sd > 0 ? 'start' : 'middle'); });
-        } else front += text(p[0] + ow * 26, p[1] + 10, names[i], 'sv-name', 15, anc);
+          if (sp.type === 'einsp') { y0 = p[1] + 26; if (low) sd = -ow; else { sd = 0; dx = 0; y0 = p[1] + supDepth('einsp', compact, true) + 50; } } else if (!low) { sd = 0; y0 = p[1] + supDepth(sp.type, compact, true) + 48; dx = 0; }
+          reactionLines(sys, sol, i, names).forEach((t, k) => {
+            const anc2 = sd < 0 ? 'end' : sd > 0 ? 'start' : 'middle';
+            front += text(p[0] + sd * dx, y0 + k * 15, t, 'sv-react', 13, anc2);
+            lab.text(p[0] + sd * dx, y0 + k * 15, t, 13, anc2);
+          });
+        } else { front += text(p[0] + ow * 26, p[1] + 10, names[i], 'sv-name', 15, anc); lab.text(p[0] + ow * 26, p[1] + 10, names[i], 15, anc); }
       });
       // Grundriss-Bemaßung
       const yd = Math.max(p0[1], p1[1]) + (sol ? 80 : 60);
       if (sym) {
         g += line(p0[0], yd, p1[0], yd, 'sv-dim') + dimTick(p0[0], yd) + dimTick(p1[0], yd);
+        lab.box(p0[0], yd - 24, p1[0], yd + 4);
         front += text((p0[0] + p1[0]) / 2, yd - 7, 'l', 'sv-dim-sym', 18);
       } else {
         const kp = critPts(sys);
         g += line(p0[0], yd, p1[0], yd, 'sv-dim');
+        lab.box(p0[0], yd - 20, p1[0], yd + 4);
         for (const k of kp) g += dimTick(P(k)[0], yd);
         for (let i = 0; i < kp.length - 1; i++) {
           const len = (kp[i + 1] - kp[i]) * ca;
@@ -485,10 +573,12 @@
       const yLow = Math.max(p0[1], p1[1]), yHigh = Math.min(p0[1], p1[1]);
       const dOff = sol ? (narrow ? 84 : 116) : (narrow ? 70 : 92);
       const xv = hh > 0 ? p1[0] + dOff : p0[0] - dOff;
+      lab.seg(xv, yLow, xv, yHigh);
       g += line(xv, yLow, xv, yHigh, 'sv-dim') + line(xv - 4, yLow - 4, xv + 4, yLow + 4, 'sv-dim-tick') + line(xv - 4, yHigh - 4, xv + 4, yHigh + 4, 'sv-dim-tick');
       // Maßzahl außen neben die Linie; reicht der Platz bis zum Bildrand nicht, auf die Innenseite
       const out = hh > 0 ? xv + 36 < W : xv - 36 > 0, sideR = (hh > 0) === out;
       front += text(xv + (sideR ? 8 : -8), (yLow + yHigh) / 2 + 5, sym ? 'h' : fmtL(Math.abs(hh)), sym ? 'sv-dim-sym' : 'sv-dim-text', sym ? 18 : 13, sideR ? 'start' : 'end');
+      lab.text(xv + (sideR ? 8 : -8), (yLow + yHigh) / 2 + 5, sym ? 'h' : fmtL(Math.abs(hh)), sym ? 18 : 13, sideR ? 'start' : 'end');
       // Neigungswinkel am unteren Ende
       const rA = 40, po = hh > 0 ? p0 : p1, dir = hh > 0 ? 1 : -1;
       const aAbs = Math.abs(aApp);
@@ -497,11 +587,15 @@
       g += `<path d="M ${r1(po[0] + dir * rA)} ${r1(po[1])} A ${rA} ${rA} 0 0 ${dir > 0 ? 0 : 1} ${r1(ex)} ${r1(ey)}" class="sv-angle"/>`;
       const tm = aAbs / 2 * Math.PI / 180;
       const aTxt = sym ? 'α' : `α = ${fmt(Math.abs(sys.alpha))}°`;
-      if (!sym && aAbs < 22) front += text(po[0] + dir * 68, po[1] + 4, aTxt, 'sv-angle-text', 13, dir > 0 ? 'start' : 'end');
-      else front += text(po[0] + dir * (rA + 8) * Math.cos(tm), po[1] - (rA + 8) * Math.sin(tm) + 4, aTxt, 'sv-angle-text', 13, dir > 0 ? 'start' : 'end');
+      const aPos = !sym && aAbs < 22 ? [po[0] + dir * 68, po[1] + 4] : [po[0] + dir * (rA + 8) * Math.cos(tm), po[1] - (rA + 8) * Math.sin(tm) + 4];
+      front += text(aPos[0], aPos[1], aTxt, 'sv-angle-text', 13, dir > 0 ? 'start' : 'end');
+      lab.text(aPos[0], aPos[1], aTxt, 13, dir > 0 ? 'start' : 'end');
+      lab.box(po[0], po[1] - rA * Math.sin(aAbs * Math.PI / 180), po[0] + dir * 62, po[1]);
       // Titel dort, wo das hohe Stabende nicht ist
       front += hh >= 0 ? text(14, 24, sys.name, 'sv-title', 14, 'start') : text(W - 14, 24, sys.name, 'sv-title', 14, 'end');
+      if (hh >= 0) lab.text(14, 24, sys.name, 14, 'start'); else lab.text(W - 14, 24, sys.name, 14, 'end');
     }
+    front += lab.resolve();
     return {
       svg: `<svg viewBox="0 0 ${W} ${H}" class="sv sv-system" role="img" aria-label="${esc(sys.name)}">${g}${front}</svg>`,
       map: { ox, k: ca * ux, L, W, H }

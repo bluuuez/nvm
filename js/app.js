@@ -222,7 +222,12 @@
   function renderQuestion() {
     const q = S.q, fb = S.state === 'feedback';
     $('question').innerHTML = tex(q.text);
-    if (!fb) $('hint').textContent = isClick() ? 'Fahre über das System und tippe auf die gesuchte Stelle.' : 'Antwort antippen oder Taste 1 bis 4.';
+    if (!fb) {
+      const touch = window.matchMedia && matchMedia('(hover: none)').matches;
+      $('hint').textContent = isClick()
+        ? (touch ? 'Tippe im System auf die gesuchte Stelle.' : 'Fahre über das System und klicke auf die gesuchte Stelle.')
+        : (touch ? 'Tippe auf die richtige Antwort.' : 'Antwort anklicken oder Taste 1 bis 4.');
+    }
     if (q.type.startsWith('sysFrom')) {
       const W = isNarrow() ? 520 : 800, H = isNarrow() ? 260 : 290;
       $('systemBox').innerHTML = D.diagram(q.cv.xs.map((x) => x * ca()), q.cv[q.qty], q.qty, Lp(), { W, H });
@@ -380,7 +385,8 @@
   function showSolution() {
     const q = S.q;
     S.solShown = true;
-    $('answers').hidden = true;
+    // Nach der Antwort bleiben die markierten Antworten sichtbar, damit man Wahl und Lösung vergleichen kann
+    if (!isClick() && S.state === 'feedback') { $('answers').hidden = false; renderAnswers(true); } else $('answers').hidden = true;
     $('tapinfo').hidden = true;
     renderSystem(true);
     const W = isNarrow() ? 420 : 800, H = isNarrow() ? 170 : 150;
@@ -437,7 +443,7 @@
       if (S.mode === 'arcade') h += `<p class="points">${S.lives > 0 ? `Noch ${S.lives} Leben.` : 'Keine Leben mehr.'}</p>`;
     }
     let sol = '';
-    if (isClick() && !isNaN(S.clickS)) sol += `<p>${tex(`Dein Tipp: x = ${N.fmt(S.clickS * ca(), 2)} m (Toleranz ± ${N.fmt(q.tol * ca(), 2)} m).`)}</p>`;
+    if (ok && isClick() && !isNaN(S.clickS)) sol += `<p>${tex(`Dein Tipp: x = ${N.fmt(S.clickS * ca(), 2)} m (Toleranz ± ${N.fmt(q.tol * ca(), 2)} m).`)}</p>`;
     sol += q.solLines.map((l) => `<p>${tex(l)}</p>`).join('');
     h += `<div class="sol">${sol}</div>`;
     h += sectionsHTML(fb.sections);

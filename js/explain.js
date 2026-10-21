@@ -134,7 +134,9 @@
     const inRange = (u, lo, hi) => u.x > lo - e && u.x < hi + e;
     const resultLine = (j, v) => {
       const u = U[j];
-      return `${sym(c, u)} = ${fmt(v)} ${unitOf(u)} (${dirWord(u, v)})`;
+      if (u.c === 'M') return `${sym(c, u)} = ${fmt(v)} kNm (${dirWord(u, v)})`;
+      if (u.c === 'N') return `${sym(c, u)} = ${fmt(v)} kN ` + (v >= 0 ? '(senkrecht zur Stabachse, zeigt nach oben)' : '– wirkt also senkrecht zur Stabachse nach unten');
+      return `${sym(c, u)} = ${fmt(v)} kN ` + (v >= 0 ? `(${dirWord(u, v)})` : `– wirkt also ${dirWord(u, v)}`);
     };
     const check = (j, val) => Math.abs(val - reactionValue(c, j)) <= 1e-6 * Math.max(1, Math.abs(val));
 
@@ -320,7 +322,9 @@
     for (const Q of Qs) {
       const va = c.right(a, Q), vb = c.left(b, Q), u = UNIT[Q];
       const d = expectedDegree(c, lds, Q, va, vb);
-      if (d === 0) parts.push(`${QNAME[Q]} = ${fmt(va)} ${u} konstant${Q === 'N' && Math.abs(va) > 1e-4 * c.scale.N ? (va > 0 ? ' (Zug)' : ' (Druck)') : ''}`);
+      if (d === 0 && Math.abs(va) < 1e-4 * c.scale[Q] + 1e-9) parts.push(`${QNAME[Q]} = 0`);
+      else if (d === 0) parts.push(`${QNAME[Q]} = ${fmt(va)} ${u} konstant${Q === 'N' && Math.abs(va) > 1e-4 * c.scale.N ? (va > 0 ? ' (Zug)' : ' (Druck)') : ''}`);
+      else if (Math.abs(va) < 1e-4 * c.scale[Q] && Math.abs(vb) < 1e-4 * c.scale[Q]) parts.push(`${QNAME[Q]} ${DEG_WORD[Q][d]}, an beiden Bereichsgrenzen 0`);
       else parts.push(`${QNAME[Q]} ${DEG_WORD[Q][d]} von ${fmt(va)} ${u} auf ${fmt(vb)} ${u}`);
       if (Q === 'V' && Qs.includes('M') && lds.some((l) => l.type === 'q') && !lds.some((l) => l.type === 'm') && va * vb < 0) {
         const s0 = bisect((s) => c.at(s, 'V'), a + c.e * 10, b - c.e * 10);
@@ -339,7 +343,7 @@
       if (Math.abs(d) > 1e-4 * c.scale[Q]) {
         if (s < c.e) jumps.push(`${QNAME[Q]} beginnt mit ${fmt(r)} ${u}`);
         else if (s > c.L - c.e) jumps.push(`${QNAME[Q]} springt von ${fmt(l)} ${u} auf 0`);
-        else jumps.push(`${QNAME[Q]} springt um ${fmt(d)} ${u} auf ${fmt(r)} ${u}`);
+        else jumps.push(`${QNAME[Q]} springt um ${fmt(d)} ${u} auf ${Math.abs(r) < 1e-4 * c.scale[Q] + 1e-9 ? '0' : fmt(r) + ' ' + u}`);
       } else if (Q === 'M' && Math.abs(c.at(s, 'M')) < 1e-4 * c.scale.M && causes.some((k) => ['G', 'free', 'sup'].includes(k.k))) jumps.push('M = 0');
       else if (Q === 'V' && causes.some((k) => k.k === 'free') && Math.abs(c.at(s, 'V')) < 1e-4 * c.scale.V) jumps.push('V = 0');
     }
@@ -349,7 +353,7 @@
     }
     if (!jumps.length) return '';
     // Lagerreaktionen, die zur betrachteten Größe gehören
-    const wantC = Qs.includes('N') ? ['H', 'N'] : ['V', 'N', 'M'];
+    const wantC = c.incl ? (Qs.includes('N') ? ['V', 'H', 'N'] : ['V', 'H', 'N', 'M']) : Qs.includes('N') ? ['H', 'N'] : ['V', 'N', 'M'];
     const rx = causes.filter((k) => k.k === 'sup').map((k) => {
       const js = c.sol.unk.map((u, j) => j).filter((j) => c.sol.unk[j].s === k.i && wantC.includes(c.sol.unk[j].c) && Math.abs(c.sol.R[j]) > 1e-9);
       return js.map((j) => `${sym(c, c.sol.unk[j])} = ${fmt(reactionValue(c, j))} ${unitOf(c.sol.unk[j])}`).join(', ');
@@ -362,9 +366,12 @@
     if (focus === 'N' && c.scale.N < 1e-6) return ['Keine Last wirkt längs der Stabachse, also ist N = 0 im ganzen Träger.'];
     const cp = critPts(c.sys), out = [];
     if (c.incl) {
+      const horiz = c.sys.loads.some((l) => Math.abs(l.Fx || 0) > 1e-9) || c.sol.unk.some((u, j) => (u.c === 'H' || u.c === 'N') && Math.abs(c.sol.R[j]) > 1e-9);
       out.push(focus === 'N'
-        ? 'Schräger Stab: N wirkt längs der Stabachse. Eine senkrechte Kraft F trägt F·sin α zu N bei (α = Neigung).'
-        : 'Schräger Stab: V wirkt quer zur Stabachse. Eine senkrechte Kraft F trägt F·cos α zu V bei, deshalb ist V am Lager kleiner als die senkrechte Lagerkraft.');
+        ? (horiz ? 'Schräger Stab: N wirkt längs der Stabachse. Senkrechte Kräfte tragen mit F·sin α bei, waagerechte mit F·cos α – auch die Lagerkräfte (α = Neigung).'
+          : 'Schräger Stab: N wirkt längs der Stabachse. Eine senkrechte Kraft F trägt F·sin α zu N bei (α = Neigung).')
+        : (horiz ? 'Schräger Stab: V wirkt quer zur Stabachse. Senkrechte Kräfte tragen mit F·cos α bei, waagerechte mit F·sin α – auch die Lagerkräfte.'
+          : 'Schräger Stab: V wirkt quer zur Stabachse. Eine senkrechte Kraft F trägt F·cos α zu V bei, deshalb ist V am Lager kleiner als die senkrechte Lagerkraft.'));
     }
     let prev = null;     // letzter konstanter N-Bereich, zum Zusammenfassen
     for (let i = 0; i < cp.length; i++) {
@@ -409,6 +416,7 @@
     };
     return { P, RG: (a, b) => `zwischen ${relNoun(a / c.L)} und ${relNoun(b / c.L)}` };
   }
+  const sgn = (v) => (v > 0 ? '+' : '') + fmt(v);
   const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
 
   // g(s): gewählter Verlauf; gl/gr: links- und rechtsseitiger Wert; extraJumps: Stellen, an denen nur die Wahl springt
@@ -454,7 +462,7 @@
       const sp = Math.abs(c.at(smid, Q)) > 0.5 * Math.abs(c.at(sm, Q)) ? smid : sm;
       const v = c.at(sp, Q);
       const out = [sys
-        ? `Dieses System ergäbe genau den gespiegelten Verlauf: ${P(sp)} wäre ${nm} ${v > 0 ? 'negativ' : 'positiv'}, gezeigt ist ${signWord(v)}.`
+        ? `Dieses System ergäbe genau den umgekehrten Verlauf (an der Stabachse gespiegelt): ${P(sp)} wäre ${nm} ${v > 0 ? 'negativ' : 'positiv'}, gezeigt ist ${signWord(v)}.`
         : `Die Form stimmt, aber das Vorzeichen ist umgekehrt: ${cap(P(sp))} ist ${nm} ${signWord(v)}.`];
       if (Q === 'V') {
         const j = c.sol.unk.findIndex((x) => Math.abs(x.x) < c.e && x.c === 'V');
@@ -506,11 +514,11 @@
       }
       if (hasC && hasG && Math.sign(dc) !== Math.sign(dg)) {
         return [sys
-          ? `Der gezeigte Verlauf springt ${P(s)} ${dc > 0 ? 'nach oben' : 'nach unten'}, dieses System ergäbe einen Sprung ${dg > 0 ? 'nach oben' : 'nach unten'}.`
+          ? `Der gezeigte Verlauf springt ${P(s)} um ${sgn(dc)} ${u}, dieses System ergäbe einen Sprung um ${sgn(dg)} ${u} – also in die andere Richtung.`
           : `Bei ${c.X(s)} (${causesAt(s)}) springt ${nm} in die falsche Richtung: richtig ist ein Sprung ${dc > 0 ? 'zu größeren' : 'zu kleineren'} Werten.`];
       }
       if (sys && hasC && hasG && Math.abs(dc - dg) > tol) {
-        return [`Der gezeigte Verlauf springt ${P(s)} um ${fmt(dc)} ${u}, dieses System ergäbe dort ${fmt(dg)} ${u}.`];
+        return [`Der gezeigte Verlauf springt ${P(s)} um ${sgn(dc)} ${u}, dieses System ergäbe dort ${sgn(dg)} ${u}.`];
       }
     }
     for (const s of extraJumps) {
@@ -556,23 +564,34 @@
       const reason = zero ? 'zwischen diesem Abschnitt und dem freien Ende greift keine Last an' : Q === 'V'
         ? (want === 0 ? 'ohne Streckenlast ist dV/dx = −q = 0' : 'unter der Streckenlast ändert sich V stetig (dV/dx = −q)')
         : Q === 'M'
-          ? (want === 2 ? 'unter einer Streckenlast ist M gekrümmt (d²M/dx² = −q)' : want === 1 ? 'ohne Streckenlast ist V konstant, also ist M eine Gerade' : zero ? 'dort wirkt kein Moment mehr' : 'dort ist V = 0, also ändert sich M nicht')
+          ? (want === 2 ? 'unter einer Streckenlast ist M gekrümmt (d²M/dx² = −q)' : want === 1 ? (lds.some((l) => l.type === 'm') ? 'ohne Streckenlast ist V konstant, und mit dM/dx = V − m ist auch die Steigung von M konstant' : 'ohne Streckenlast ist V konstant, also ist M eine Gerade') : zero ? 'dort wirkt kein Moment mehr' : 'dort ist V = 0, also ändert sich M nicht')
           : (want === 0 ? 'ohne Last längs der Achse bleibt N gleich' : 'die Last längs der Achse ändert N stetig');
       const gotTxt = got === 0 ? 'nahezu konstant' : words[got];
       return [sys
         ? `Der gezeigte Verlauf ist ${RG(a, b)} ${wantTxt} – ${reason}. Dieses System ergäbe dort einen ${['konstanten', 'geraden', 'gekrümmten'][got]} Verlauf.`
         : `${cap(RG(a, b))} (${regionDesc(c, lds)}) ${zero ? `muss ${nm} = 0 sein` : `verläuft ${nm} ${wantTxt}`}, denn ${reason}. ${you} ist dort ${gotTxt}.`];
     }
-    // 5) Knicke (nur Diagramm): z. B. Einzellast → Knick in M
-    if (!sys && Q !== 'N') {
+    // 5) Knicke: z. B. Einzellast → Knick in M
+    if (Q !== 'N') {
       const h = 0.02 * c.L;
       const slope = (f, s, dir) => (dir > 0 ? f(s + h) - f(s + 0.2 * h) : f(s - 0.2 * h) - f(s - h)) / (0.8 * h);
+      const cf = (x) => c.at(x, Q);
+      const kink = (f, s) => Math.abs(slope(f, s, 1) - slope(f, s, -1)) * c.L;
+      const kwhy = Q === 'M' ? 'V dort springt (dM/dx = V)' : 'sich dort die Streckenlast ändert (dV/dx = −q)';
       for (const s of cp) {
         if (s <= 2 * h || s >= c.L - 2 * h) continue;
-        const cf = (x) => c.at(x, Q);
-        const kc = Math.abs(slope(cf, s, 1) - slope(cf, s, -1)) * c.L, kg = Math.abs(slope(g, s, 1) - slope(g, s, -1)) * c.L;
+        const kc = kink(cf, s), kg = kink(g, s);
         if (kc > 0.5 * sc && kg < 0.15 * kc) {
-          return [`Bei ${c.X(s)} (${causesAt(s)}) hat ${nm} einen Knick, weil ${Q === 'M' ? 'V dort springt (dM/dx = V)' : 'sich dort die Streckenlast ändert (dV/dx = −q)'}. ${you} verläuft dort glatt.`];
+          return [sys
+            ? `Der gezeigte Verlauf hat ${P(s)} einen Knick, weil ${kwhy}. Bei diesem System greift dort nichts an, der Verlauf wäre dort glatt.`
+            : `Bei ${c.X(s)} (${causesAt(s)}) hat ${nm} einen Knick, weil ${kwhy}. ${you} verläuft dort glatt.`];
+        }
+      }
+      if (sys) {
+        for (const s of extraJumps) {
+          if (s <= 2 * h || s >= c.L - 2 * h || cp.some((p) => Math.abs(p - s) < 0.03 * c.L)) continue;
+          const kc = kink(cf, s), kg = kink(g, s);
+          if (kg > 0.5 * sc && kc < 0.15 * kg) return [`Dieses System hätte ${P(s)} einen Knick in ${nm}. Der gezeigte Verlauf ist dort aber gerade bzw. glatt.`];
         }
       }
     }
@@ -622,31 +641,76 @@
   function clickWhy(c, q, sTap) {
     const Q = q.type.startsWith('clickV') ? 'V' : 'M', u = UNIT[Q];
     const out = [];
-    if (!isNaN(sTap)) out.push(`Dein Tipp: ${c.X(sTap)}, dort ist ${Q} = ${fmt(c.at(sTap, Q))} ${u}.`);
-    // nächstgelegene Zielstelle
-    let sT = q.target[0];
-    if (!isNaN(sTap)) for (const t of q.target) if (Math.abs(t - sTap) < Math.abs(sT - sTap)) sT = t;
     const cp = critPts(c.sys);
+    // nächste Zielstelle zum Tipp (bei Maxima die exakte Stelle bzw. den exakten Bereich)
+    let sT = q.target[0], rng = null;
+    if (q.exact && q.exact.length) {
+      const d = (r) => (isNaN(sTap) ? 0 : sTap < r[0] ? r[0] - sTap : sTap > r[1] ? sTap - r[1] : 0);
+      rng = q.exact.reduce((m, r) => (d(r) < d(m) ? r : m), q.exact[0]);
+      sT = isNaN(sTap) ? rng[0] : Math.min(Math.max(sTap, rng[0]), rng[1]);
+      if (rng[1] - rng[0] < 1e-9) rng = null; else sT = rng[0];
+    } else if (!isNaN(sTap)) for (const t of q.target) if (Math.abs(t - sTap) < Math.abs(sT - sTap)) sT = t;
     const atCrit = cp.find((p) => Math.abs(p - sT) < 0.012 * c.L);
     const causes = atCrit !== undefined ? pointCauses(c, atCrit) : [];
-    const ctxt = causes.map((k) => (k.k === 'sup' ? `über Lager ${c.names[k.i]}` : k.k === 'G' ? 'am Gelenk' : k.k === 'free' ? 'am freien Ende' : `unter ${k.txt}`)).join(', ');
+    const where = (k) => (k.k === 'sup' ? `über Lager ${c.names[k.i]}` : k.k === 'G' ? 'am Gelenk' : k.k === 'free' ? 'am freien Ende' : k.k === 'M' ? 'am Einzelmoment' : k.short === 'Horizontalkraft' ? 'am Angriffspunkt der Horizontalkraft' : k.short === 'schräge Einzellast' ? 'unter der schrägen Einzellast' : 'unter der Einzellast');
+    const ctxt = causes.map(where).join(' und ');
     const sp = atCrit !== undefined ? c.sys.sup.find((p) => Math.abs(p.x - atCrit) < 1e-6) : null;
-    let reason;
-    if (q.type === 'clickMmax') {
-      const v = c.at(sT, 'M');
-      if (sp && sp.type === 'einsp') reason = `an der Einspannung ist |M| am größten (${fmt(v)} kNm)`;
-      else if (ctxt) reason = `${ctxt} wechselt V das Vorzeichen, also hat M dort sein Extremum (${fmt(v)} kNm)`;
-      else reason = `dort wird V = 0 (Streckenlast), also hat M dort sein Extremum (${fmt(v)} kNm)`;
-    } else if (q.type === 'clickVmax') {
-      const v = Math.max(Math.abs(c.left(sT, 'V')), Math.abs(c.right(sT, 'V')));
-      reason = ctxt ? `${ctxt} wird die größte Kraft eingeleitet, |V| = ${fmt(v)} kN` : `dort ist |V| = ${fmt(v)} kN am größten`;
-    } else if (q.type === 'clickV0') {
-      reason = ctxt ? `${ctxt} springt V über die Null` : 'dort wird V unter der Streckenlast zu null';
-    } else {
-      reason = ctxt && causes.some((k) => k.k === 'G') ? 'am Gelenk ist M immer null' : 'dort wechselt M zwischen positivem Feldmoment und negativem Stützmoment das Vorzeichen';
+    const hasLineMoment = c.sys.loads.some((l) => l.type === 'm');
+    const at = c.X(sT);
+
+    if (!isNaN(sTap)) {
+      const v = c.at(sTap, Q);
+      let t = `Dein Tipp: ${c.X(sTap)}, dort ist ${Q} = ${fmt(v)} ${u}`;
+      if (q.type === 'clickMmax' || q.type === 'clickVmax') {
+        const best = q.maxVal || c.scale[Q];
+        if (Math.abs(v) < 0.985 * best) t += ` – betragsmäßig kleiner als ${fmt(best)} ${u}`;
+      } else {
+        const h = 0.03 * c.L;
+        const flat = [-h, -h / 2, h / 2, h].every((d) => Math.abs(c.at(Math.min(Math.max(sTap + d, 0), c.L), Q)) < 1e-3 * c.scale[Q]);
+        if (Math.abs(v) < 1e-3 * c.scale[Q]) t += flat ? `. ${Q} ist dort zwar null, wechselt aber nicht das Vorzeichen – auf diesem Abschnitt ist ${Q} durchgehend 0` : `. ${Q} ist dort null, wechselt aber nicht das Vorzeichen`;
+      }
+      const dist = Math.min(...q.target.map((x) => Math.abs(x - sTap)));
+      if (dist < 2 * q.tol) t += `. Knapp daneben – erlaubt sind ± ${c.px(q.tol)} m`;
+      out.push(t + '.');
     }
-    out.push(`Gesucht war ${c.X(sT)}: ${reason}.`);
+    let reason;
+    const hasMoment = causes.some((k) => k.k === 'M');
+    if (rng) {
+      reason = `Von ${c.X(rng[0])} bis ${c.px(rng[1])} m ist |${Q}| konstant am größten – jede Stelle in diesem Bereich zählt.`;
+    } else if (q.type === 'clickMmax') {
+      if (hasMoment) reason = `${cap(ctxt)} (${at}) springt M – direkt daneben ist |M| am größten.`;
+      else if (sp && sp.type === 'einsp') reason = `An der Einspannung (${at}) ist |M| am größten: Dort wirken alle Lasten mit ihrem größten Hebelarm.`;
+      else if (ctxt && hasLineMoment && !causes.some((k) => k.k === 'F')) reason = `${cap(ctxt)} (${at}) wechselt die Steigung von M das Vorzeichen (dM/dx = V − m), also hat M dort sein Extremum.`;
+      else if (ctxt) reason = `${cap(ctxt)} (${at}) wechselt V das Vorzeichen, also hat M dort sein Extremum (dM/dx = V).`;
+      else reason = `Bei ${at} wird V unter der Streckenlast null, also hat M dort sein Extremum (dM/dx = V = 0).`;
+    } else if (q.type === 'clickVmax') {
+      if (sp) reason = `${cap(ctxt)} (${at}) wird die Auflagerkraft eingeleitet – direkt daneben ist |V| am größten.`;
+      else if (causes.some((k) => k.k === 'F')) reason = `${cap(ctxt)} (${at}) springt V – direkt daneben ist |V| am größten.`;
+      else reason = `Bei ${at} ist |V| am größten${ctxt ? ` (${ctxt})` : ''}.`;
+    } else if (q.type === 'clickV0') {
+      reason = ctxt ? `${cap(ctxt)} (${at}) springt V über die Null.` : `Bei ${at} wird V unter der Streckenlast null und wechselt dabei das Vorzeichen – dort hat M sein Extremum.`;
+    } else {
+      reason = ctxt && causes.some((k) => k.k === 'G') ? `Am Gelenk (${at}) ist M immer null.` : `Bei ${at} wechselt M das Vorzeichen – der Übergang zwischen Feld- und Stützbereich.`;
+    }
+    out.push(reason);
     return out;
+  }
+
+  // Merksätze für Auflagerkraft-Aufgaben: Gleichgewicht statt Verlauf
+  function reactionRules(c) {
+    const { sys, sol } = c, R = [];
+    const nV = sol.unk.filter((u) => u.c === 'V' || u.c === 'N').length;
+    if (sys.hinges.length) R.push('Gelenk: Zuerst den Teil mit nur einem Lager freischneiden – dort gilt M = 0 am Gelenk. Die Gelenkkraft belastet dann den Rest.');
+    else if (sys.sup.some((p) => p.type === 'einsp')) R.push('Einspannung: ΣV liefert die Lagerkraft direkt, ΣM um die Einspannung das Einspannmoment.');
+    else if (nV === 2) R.push('Momentengleichgewicht um das jeweils andere Lager liefert jede Lagerkraft direkt – ΣV = 0 ist dann die Kontrolle.');
+    if (sys.loads.some((l) => l.type === 'q')) R.push(sys.loads.some((l) => l.sub === 'tri')
+      ? 'Dreieckslast im Gleichgewicht: Resultierende q₀·l/2 im Schwerpunkt, ein Drittel von der hohen Seite.'
+      : 'Streckenlast im Gleichgewicht durch die Resultierende q·l in ihrer Mitte ersetzen.');
+    if (sys.loads.some((l) => l.type === 'M' || l.type === 'm')) R.push('Momente gehen ohne Hebelarm in ΣM ein und tauchen in ΣV gar nicht auf.');
+    if (sol.unk.some((u, j) => u.c === 'V' && sol.R[j] < -1e-9)) R.push('Eine negative Lagerkraft zeigt nach unten: Das Lager hält den Träger fest, statt ihn zu stützen – typisch bei Lasten auf einem Kragarm.');
+    if (c.incl) R.push('Schräger Stab: Hebelarm ist der senkrechte Abstand zur Wirkungslinie – bei senkrechten Kräften also der waagerechte Abstand.');
+    if (sys.loads.some((l) => l.sub === 'Fs' || l.sub === 'H')) R.push('Waagerechte Kräfte nimmt nur das Festlager bzw. die Einspannung auf (ΣH = 0).');
+    return R.slice(0, 4);
   }
 
   // ---------------------------------------------------------- Zusammenbau
@@ -680,11 +744,7 @@
           why.push(...curveWhy(c, Q, g, (s) => sgAt(so, Math.max(s * k - e, 0))[Q], (s) => sgAt(so, Math.min(s * k + e, Lo))[Q], jumps, 'sys'));
         }
       } catch (er) { /* Erklärung ist Zusatz – nie die Aufgabe blockieren */ }
-      if (opt && opt.expl) why.push((why.length ? 'Typischer Denkfehler: ' : '') + opt.expl);
-      if (opt && q.type.startsWith('val')) {
-        const cor = q.opts[q.correct];
-        why.push(`Richtig ist ${cor.label}, deine Wahl war ${opt.label}.`);
-      }
+      if (opt && opt.expl && !(['anderesSystem', 'vorzeichen'].includes(opt.tag) && why.length)) why.push((why.length ? 'Typischer Denkfehler: ' : '') + opt.expl);
     } else if (ans.tag === 'zeit') why.push('Die Zeit ist abgelaufen. Unten steht, wie man schnell auf die Lösung kommt.');
 
     const sections = [];
@@ -700,8 +760,8 @@
     }
     // Merksätze passend zur gefragten Größe
     const rel = (r) => (focus === 'N' ? /\bN\b|Normalkraft|längs|Festlager/.test(r) : !/^Horizontalkraft|N > 0 ist Zug|Die Normalkraft hängt/.test(r));
-    const merke = featureRules(sys, focus).filter(rel).slice(0, 4);
-    const cl = !q.symbolic && classicLine(sys);
+    const merke = q.type === 'valR' ? reactionRules(c) : featureRules(sys, focus).filter(rel).slice(0, 4);
+    const cl = !q.symbolic && focus === 'M' && q.type !== 'valR' && classicLine(sys);
     if (cl) merke.unshift('Standardfall: ' + cl);
     sections.push({ title: 'Merke', lines: merke });
     return { why, sections };

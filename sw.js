@@ -3,7 +3,7 @@
  * Seite, Code und Stile: mit Netz immer die neueste Version (Speicher nur als Rückfall).
  * Schriften, Icons und KaTeX ändern sich nicht: direkt aus dem Speicher.
  * VERSION erhöhen, wenn sich Dateien ändern, damit alte Speicherstände gelöscht werden. */
-const VERSION = 'nvm-v21';
+const VERSION = 'nvm-v22';
 const FILES = [
   './',
   'fonts.css',

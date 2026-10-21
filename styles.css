@@ -470,3 +470,6 @@ text.sv-cross-text { font-weight: 700; pointer-events: none; }
   *, *::before, *::after { animation-duration: .001ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
   .hm-shape { animation: none; stroke-dashoffset: 0; fill-opacity: 1; }
 }
+
+/* Tastenkürzel nur dort zeigen, wo es eine Tastatur gibt */
+@media (hover: none) { .keys { display: none; } }

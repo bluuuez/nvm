@@ -113,8 +113,8 @@
           // Aufgaben ohne passende Kombination ausgrauen (z. B. N + Maximum antippen); die Wahl bleibt gespeichert
           const can = key !== 'learnTasks' || taskExists(b.dataset.v);
           b.disabled = !can;
-          const lowHinge = b.dataset.v === 'gelenk' && Number(settings.learnLevel) < 3;
-          b.title = can ? '' : lowHinge ? 'Gelenke gibt es ab Stufe 3' : b.dataset.v === 'gelenk' ? 'Gelenke gibt es bei Gerberträgern und Rahmen' : 'Gibt es für die gewählten Schnittgrößen und Tragwerke nicht';
+          const lowHinge = b.dataset.v === 'gelenk' && Number(settings.learnLevel) < N.HINGE_FROM;
+          b.title = can ? '' : lowHinge ? `Gelenke gibt es ab Stufe ${N.HINGE_FROM}` : b.dataset.v === 'gelenk' ? 'Gelenke gibt es bei Gerberträgern und Rahmen' : 'Gibt es für die gewählten Schnittgrößen und Tragwerke nicht';
           b.setAttribute('aria-pressed', String(can && settings[key].includes(b.dataset.v)));
         } else {
           b.setAttribute('role', 'radio');
@@ -122,16 +122,16 @@
         }
       });
     });
-    const lv = Number(settings.learnLevel), info = N.levelInfo(lv);
+    const lv = Number(settings.learnLevel), info = N.stufe(lv);
     const later = [];
-    if (lv < 3 && settings.learnTasks.includes('gelenk')) later.push('Gelenke ab Stufe 3');
-    if (lv < 4 && settings.learnKinds.includes('rahmen')) later.push('Rahmen und Stabwerke ab Stufe 4');
-    $('levelDesc').innerHTML = `<strong>Stufe ${lv}, ${esc(info.name)}:</strong> ${esc(info.loads)} Die Stufe bestimmt Größe der Systeme und Zahl der Lasten, die Tragwerke wählst du oben.` +
+    if (lv < N.HINGE_FROM && settings.learnTasks.includes('gelenk')) later.push(`Gelenke ab Stufe ${N.HINGE_FROM}`);
+    if (lv < N.FRAME_FROM && settings.learnKinds.includes('rahmen')) later.push(`Rahmen und Stabwerke ab Stufe ${N.FRAME_FROM}`);
+    $('levelDesc').innerHTML = `<strong>Stufe ${lv}, ${esc(info.name)}:</strong> ${esc(info.text)} Dieselben Stufen wie im Arcade; die Tragwerke wählst du oben.` +
       (later.length ? ` <span class="muted">Später dazu: ${esc(later.join(', '))}.</span>` : '');
     const empty = !learnPool().length;
     const onlyFrames = settings.learnKinds.length === 1 && settings.learnKinds[0] === 'rahmen';
     let warn = '';
-    if (empty) warn = onlyFrames && lv < 4 ? 'Rahmen und Stabwerke gibt es ab Stufe 4.' : onlyFrames ? 'Rahmen und Stabwerke gibt es nur bei „Verlauf zum System“.' : 'Für diese Auswahl gibt es keine Aufgaben. Wähle eine weitere Schnittgröße, Aufgabe oder ein anderes Tragwerk.';
+    if (empty) warn = onlyFrames && lv < N.FRAME_FROM ? `Rahmen und Stabwerke gibt es ab Stufe ${N.FRAME_FROM}.` : onlyFrames ? 'Rahmen und Stabwerke gibt es nur bei „Verlauf zum System“.' : 'Für diese Auswahl gibt es keine Aufgaben. Wähle eine weitere Schnittgröße, Aufgabe oder ein anderes Tragwerk.';
     $('learnWarn').hidden = !warn;
     $('learnWarn').textContent = warn;
     $('soundBtn').setAttribute('aria-pressed', String(!!settings.sound));
@@ -163,13 +163,13 @@
     let incl;
     if (mode === 'aus') incl = 0;
     else if (mode === 'nur') incl = 1;
-    else incl = S.level >= 2 ? 0.3 : 0.12;
+    else incl = N.stufe(S.level).incl;
     return { calc: arcade ? ARCADE.calc : settings.calc, incl, task: 'mix' };
   }
   function timeFor() {
     if (S.mode === 'arcade') {
-      // Rahmen brauchen mehr Zeit; nach der letzten Stufe wird es nur noch knapper
-      let t = Math.max(16, 34 - 3 * Math.min(S.level, 6));
+      // Zeit aus der Stufentabelle; Rahmen brauchen mehr, nach der letzten Stufe wird es nur noch knapper
+      let t = N.stufe(S.level).time;
       if (S.q && S.q.frame) t += S.q.type.startsWith('frame') ? 14 : 6;
       if (S.level > N.MAX_LEVEL) t = Math.max(12, t - 2 * (S.level - N.MAX_LEVEL));
       return t;
@@ -416,11 +416,11 @@
         const mult = 1 + 0.25 * Math.min(S.streak - 1, 4);
         S.lastPts = Math.min(1400, Math.round((100 * S.level + tb) * mult));   // höchstens 1400 je Antwort (Prüfung in der Datenbank)
         S.score += S.lastPts;
-        const nl = Math.min(N.MAX_LEVEL + 1, 1 + Math.floor(S.nCorrect / 5));
+        const nl = Math.min(N.MAX_LEVEL + 12, 1 + Math.floor(S.nCorrect / 5));
         if (nl > S.level) {
           S.level = nl;
-          const info = N.levelInfo(nl);
-          S.levelUp = nl <= N.MAX_LEVEL ? `Level ${nl}, ${info.name}. ${info.short}` : `Level ${nl}: wie Stufe ${N.MAX_LEVEL}, aber mit weniger Zeit.`;
+          const info = N.stufe(nl);
+          S.levelUp = nl <= N.MAX_LEVEL ? `Stufe ${nl}, ${info.name}. ${info.neu}` : `Stufe ${N.stufeText(nl)}: wie Stufe ${N.MAX_LEVEL}, aber mit weniger Zeit.`;
         }
       }
     } else {
@@ -482,7 +482,7 @@
     const q = S.q;
     let mode;
     const tStr = S.timed ? `${Math.round(S.tMax)} Sekunden` : 'kein Zeitlimit';
-    if (S.mode === 'arcade') mode = `Arcade, ${tStr}. Punkte gibt es für Level und Tempo, eine Serie richtiger Antworten verdoppelt sie.`;
+    if (S.mode === 'arcade') mode = `Arcade, ${tStr}. Punkte gibt es für Stufe und Tempo, eine Serie richtiger Antworten verdoppelt sie.`;
     else {
       const TN = { verlauf: 'Verlauf zum System', system: 'System zum Verlauf', max: 'Maximum antippen', null: 'Nullstelle antippen', werte: 'Werte bestimmen', gelenk: 'Gelenke' };
       const qs = settings.learnQtys.length < 3 ? settings.learnQtys.join(', ') : '';
@@ -526,7 +526,7 @@
       // als SVG, damit iOS kein rotes Emoji daraus macht
       const heart = (lost) => `<svg class="heart${lost ? ' lost' : ''}" viewBox="0 0 24 22" aria-hidden="true"><path d="M12 21.2 10.6 20C5.4 15.4 2 12.3 2 8.5 2 5.4 4.4 3 7.5 3c1.7 0 3.4.8 4.5 2.1C13.1 3.8 14.8 3 16.5 3 19.6 3 22 5.4 22 8.5c0 3.8-3.4 6.9-8.6 11.5z"/></svg>`;
       const hearts = [0, 1, 2].map((k) => heart(k >= Math.max(S.lives, 0))).join('');
-      h = `<span class="hud-mode">Arcade</span><span><span class="k">Level</span>${S.level}</span>` +
+      h = `<span class="hud-mode">Arcade</span><span><span class="k">Stufe</span>${N.stufeText(S.level)}</span>` +
         `<span><span class="k">Punkte</span>${S.score.toLocaleString('de-DE')}</span>` +
         `<span><span class="k">Serie</span>${S.streak}</span><span class="lives" aria-label="${S.lives} Leben">${hearts}</span>`;
       if (S.lastPts && S.state === 'feedback') h += `<span class="pop">+${S.lastPts}</span>`;
@@ -558,7 +558,7 @@
     if (isNew) stats.best = S.score;
     $('endKicker').textContent = 'Game over';
     $('endTitle').innerHTML = `<span class="mark">${S.score.toLocaleString('de-DE')}</span> Punkte`;
-    let body = `<p>Level ${S.level}, beste Serie ${S.bestStreak}, ${S.nCorrect} von ${S.nAsked} richtig.</p>` +
+    let body = `<p>Stufe ${N.stufeText(S.level)}, beste Serie ${S.bestStreak}, ${S.nCorrect} von ${S.nAsked} richtig.</p>` +
       `<p>Rang: <strong>${esc(N.rankName(S.score))}</strong></p>`;
     if (isNew) body += '<p><strong>Neuer Highscore.</strong></p>';
     if (ml.length) body += `<p class="end-sub"><strong>Daran hat es gehakt:</strong></p><ul>${ml.map((t) => `<li>${esc(N.tagLabel(t))}: ${S.mistakes[t]}×</li>`).join('')}</ul>`;
@@ -583,7 +583,7 @@
     return rows.map((r, k) => {
       const me = mark.includes(r.id);
       return `<li class="${me ? 'me' : ''}"><span class="pos">${startPos + k}.</span><span class="nm">${esc(r.name)}</span>` +
-        `<span class="lv">Level ${Number(r.level)}</span><span class="pts">${Number(r.score).toLocaleString('de-DE')}</span></li>`;
+        `<span class="lv">Stufe ${N.stufeText(Number(r.level))}</span><span class="pts">${Number(r.score).toLocaleString('de-DE')}</span></li>`;
     }).join('');
   }
   // own: { rank } nach dem Eintragen; ohne own (Bestenliste aus dem Menü) wird der beste eigene Eintrag gesucht
@@ -759,6 +759,8 @@
   window.NVMapp = { S, startMode, nextQuestion, answer, handleTap, toggleSolution, nextStep, openCheat, closeCheat, toggleBoss, goMenu, settings };
 
   $('boardModeBtn').hidden = !N.board.enabled();
+  // Stufen-Hinweis im Arcade-Text aus der Stufentabelle, damit er nie veraltet
+  $('arcadeDesc').textContent = `Drei Leben und Zeitlimit. Du startest auf Stufe 1, alle fünf richtigen Antworten geht es eine Stufe höher – dieselben Stufen wie beim Lernen. Ab Stufe ${N.HINGE_FROM} kommen Gelenke dazu, ab Stufe ${N.FRAME_FROM} Rahmen und Stabwerke. Für alle gleich, damit die Bestenliste fair ist: Werte im Kopf rechnen, ab und zu schiefe Stäbe.`;
   applyTheme();
   applyPlot();
   syncSegs();

@@ -12,33 +12,35 @@ auch offline; mit Netz lädt es immer die neueste Version.
 Lokal: `index.html` doppelklicken – läuft direkt im Browser, ohne Installation und ohne Internet.
 NVM setzt keine Cookies und speichert Highscore und Einstellungen nur im eigenen Browser.
 Einzige Ausnahme ist die freiwillige Online-Bestenliste: Wer nach einem Arcade-Spiel einen Namen
-einträgt, schickt Name, Punkte, Level und Zeitpunkt an die Datenbank (Supabase).
+einträgt, schickt Name, Punkte, Stufe und Zeitpunkt an die Datenbank (Supabase).
 
 ## Modi
 
 - **Arcade:** drei Leben, Zeitlimit, alles gemischt, nie zweimal derselbe Aufgabentyp
-  hintereinander; alle fünf richtigen Antworten steigt das Level
+  hintereinander; Start auf Stufe 1, alle fünf richtigen Antworten eine Stufe höher. Nach Stufe 8
+  geht es als „Stufe 8+1“, „8+2“ … weiter, nur mit weniger Zeit
 - **Lernen:** Mehrfachauswahl von Schnittgrößen (N, V, M), Aufgaben (Verlauf zum System,
-  System zum Verlauf, Maximum antippen, Nullstelle antippen, Werte bestimmen) und Tragwerken,
-  dazu eine Stufe; nach jeder Antwort ein Lösungsweg aus der echten Rechnung (Auflagerkräfte,
+  System zum Verlauf, Maximum antippen, Nullstelle antippen, Werte bestimmen, Gelenke) und
+  Tragwerken, dazu eine Stufe; nach jeder Antwort ein Lösungsweg aus der echten Rechnung (Auflagerkräfte,
   Verlauf bereichsweise) und bei Fehlern die konkrete Abweichung (Vorzeichen, Randwert, Sprung,
   Knick, Form)
 
-Stufen: 1 Einstieg (Einfeldträger und Kragarm, eine Last), 2 Grundlagen (Träger mit Kragarm,
-alle Lastarten), 3 Fortgeschritten (Gerberträger, ein bis zwei Lasten), 4 Erste Rahmen (Kragwinkel,
+Stufen – ein gemeinsames System für Arcade und Lernen (Tabelle `STUFEN` in `js/core.js`: Träger,
+Lasten, Gelenk-Aufgaben, Rahmenfamilien mit Schwierigkeitsband, Zeit im Arcade): 1 Einstieg (Einfeldträger und Kragarm, eine Last), 2 Grundlagen (Träger mit Kragarm,
+alle Lastarten), 3 Fortgeschritten (Gerberträger, Gelenk-Aufgaben, ein bis zwei Lasten), 4 Erste Rahmen (Kragwinkel,
 Knick- und Treppenträger, abgespannte Träger), 5 Rahmen (Rahmen, Dreigelenkrahmen, Gelenkträger auf
 Pendelstützen), 6 Pendel- und Nullstäbe (Fachwerkunterbau, unterspannte Träger, Stäbe auf
 Pendelstäben), 7 Klausurniveau, 8 Profi. Rahmen und Stabwerke gibt es nur als „Verlauf zum System“.
 Ihre Schwierigkeit wird aus Größe, Lösungsweg und Lasten berechnet (Stäbe, Gelenke, Ecken, schräge
 Stäbe, Teilsysteme, Nullstäbe, Lastarten), nicht nur aus der Zahl der Lasten.
-- **Gelenke** (Lernen ab Stufe 3, Arcade ab Level 5): Momenten-, Querkraft- und Normalkraftgelenk.
-  „Gelenk erkennen“ zeigt ein System mit Fragezeichen und seine drei Verläufe; bei „Verlauf zum
-  System“ mit Gelenk rechnen die falschen Antworten mit einer anderen Gelenkart
+- **Gelenke** (ab Stufe 3): einfache Träger mit Momenten-, Querkraft- oder Normalkraftgelenk.
+  „Verlauf zum System“: die falschen Antworten rechnen mit einer anderen Gelenkart; „System zum
+  Verlauf“: dieselbe Lagerung mit den drei Gelenkarten und das Gelenk an anderer Stelle
 - **Spickzettel:** Vorzeichen, Beziehungen, Standardfälle, Gelenkarten; im Arcade gesperrt
 - **Bestenliste:** nach dem Arcade einen Namen eintragen (Filter gegen Beleidigungen in App und
   Datenbank) und sehen, auf welchem Platz man steht
 
-Arcade läuft für alle gleich, damit die Bestenliste fair ist: Zeit wird mit dem Level kürzer,
+Arcade läuft für alle gleich, damit die Bestenliste fair ist: Zeit wird mit der Stufe kürzer,
 Werte im Kopf rechnen, ab und zu schiefe Stäbe. Beim Lernen einstellbar: Zeit pro Aufgabe,
 Werte-Aufgaben als Formeln, mit glatten Zahlen oder mit Taschenrechner, schiefe Stäbe
 aus/ab und zu/nur schief. Für beide Modi: Verläufe positiv zur gestrichelten Faser (TUM) oder

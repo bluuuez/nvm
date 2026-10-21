@@ -13,9 +13,9 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="NVM">
-  <link rel="stylesheet" href="fonts.css?v=32">
+  <link rel="stylesheet" href="fonts.css?v=33">
   <link rel="stylesheet" href="katex/katex.min.css">
-  <link rel="stylesheet" href="styles.css?v=32">
+  <link rel="stylesheet" href="styles.css?v=33">
   <script>
     // Theme vor dem ersten Zeichnen setzen (kein Aufblitzen)
     (function () {
@@ -107,7 +107,7 @@
       <div class="modes">
         <button class="mode mode-main" type="button" data-mode="arcade">
           <span class="mode-name">Arcade spielen</span>
-          <span class="mode-desc">Drei Leben und Zeitlimit. Alles gemischt, alle fünf richtigen Antworten steigt das Level, ab Level 4 kommen Rahmen und Stabwerke dazu. Für alle gleich, damit die Bestenliste fair ist: Werte im Kopf rechnen, ab und zu schiefe Stäbe.</span>
+          <span class="mode-desc" id="arcadeDesc">Drei Leben und Zeitlimit. Du startest auf Stufe 1, alle fünf richtigen Antworten geht es eine Stufe höher – dieselben Stufen wie beim Lernen. Ab Stufe 3 kommen Gelenke dazu, ab Stufe 4 Rahmen und Stabwerke. Für alle gleich, damit die Bestenliste fair ist: Werte im Kopf rechnen, ab und zu schiefe Stäbe.</span>
         </button>
         <button class="mode" type="button" data-mode="learn">
           <span class="mode-name">Lernen</span>
@@ -191,7 +191,7 @@
           <button class="btn primary" id="boardSubmit" type="submit">Eintragen</button>
         </div>
         <p class="board-msg" id="boardMsg" role="status" aria-live="polite"></p>
-        <p class="board-note">Der Name ist für alle sichtbar. Gespeichert werden nur Name, Punkte, Level und Zeitpunkt.</p>
+        <p class="board-note">Der Name ist für alle sichtbar. Gespeichert werden nur Name, Punkte, Stufe und Zeitpunkt.</p>
       </form>
       <div class="board-box" id="boardBox" hidden></div>
       <div class="end-actions">
@@ -241,15 +241,15 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="katex/katex.min.js"></script>
-  <script src="js/config.js?v=32"></script>
-  <script src="js/core.js?v=32"></script>
-  <script src="js/board.js?v=32"></script>
-  <script src="js/math.js?v=32"></script>
-  <script src="js/explain.js?v=32"></script>
-  <script src="js/frame.js?v=32"></script>
-  <script src="js/framegen.js?v=32"></script>
-  <script src="js/draw.js?v=32"></script>
-  <script src="js/drawframe.js?v=32"></script>
-  <script src="js/app.js?v=32"></script>
+  <script src="js/config.js?v=33"></script>
+  <script src="js/core.js?v=33"></script>
+  <script src="js/board.js?v=33"></script>
+  <script src="js/math.js?v=33"></script>
+  <script src="js/explain.js?v=33"></script>
+  <script src="js/frame.js?v=33"></script>
+  <script src="js/framegen.js?v=33"></script>
+  <script src="js/draw.js?v=33"></script>
+  <script src="js/drawframe.js?v=33"></script>
+  <script src="js/app.js?v=33"></script>
 </body>
 </html>

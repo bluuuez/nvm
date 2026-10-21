@@ -342,9 +342,6 @@
       return fr;
     }
   };
-  const FAM_MIN = { winkel: 4, treppe: 4, abspann: 4, portal: 5, pendel: 5, dreigelenk: 6, fachwerk: 6, kombi: 7, gelenk: 6 };
-  // kleine Systeme ohne Pendelstäbe nur in den unteren Rahmenstufen
-  const FAM_MAX = { winkel: 5, treppe: 5, abspann: 6 };
 
   // ------------------------------------------------------------ Schwierigkeit
   // Merkmale des gelösten Systems
@@ -387,14 +384,14 @@
     const L = fr.loads.reduce((s, ld) => s + LOAD_W(fr, ld), 0);
     return { D: Math.round((G + W + L) * 100) / 100, G, W, L, f };
   }
-  // Schwierigkeitsbänder je Stufe (geeicht an den Systemen der Sammlung, siehe Tests)
-  const BAND = { 4: [1.2, 3.2], 5: [2.6, 4.6], 6: [3.8, 6], 7: [5.2, 7.6], 8: [6.8, 12] };
-  const NLOADS = { 4: [1, 1], 5: [1, 2], 6: [1, 2], 7: [2, 2], 8: [2, 3] };
+  // Familien, Schwierigkeitsband und Lastzahl je Stufe stehen in der gemeinsamen Stufentabelle (core.js, STUFEN)
+  const stageOf = (stage) => NVM.STUFEN[Math.max(NVM.FRAME_FROM, Math.min(NVM.MAX_LEVEL, stage)) - 1].frame;
 
   function generate(stage, famPref) {
-    stage = Math.max(4, Math.min(8, stage));
-    const fams = famPref ? [famPref] : Object.keys(FAM).filter((k) => FAM_MIN[k] <= stage && (FAM_MAX[k] || 99) >= stage);
-    const band = BAND[stage];
+    const S = stageOf(stage);
+    stage = Math.max(NVM.FRAME_FROM, Math.min(NVM.MAX_LEVEL, stage));
+    const fams = famPref ? [famPref] : S.fam;
+    const band = S.band;
     let best = null, bestDist = Infinity;
     // erst eine Familie wählen, dann darin suchen: so kommen alle Familien gleich oft dran
     const order = fams.slice().sort(() => rnd() - 0.5);
@@ -405,10 +402,9 @@
       if (rnd() < 0.5) mirror(fr);
       if (crossing(fr)) continue;
       orient(fr);
-      const [n1, n2] = NLOADS[stage];
+      const [n1, n2] = S.nl;
       const nl = randi(n1, n2), used = [];
-      const kinds = stage <= 4 ? ['F', 'F', 'q', 'H'] : ['F', 'F', 'q', 'q', 'H', 'M', 'tri'];
-      for (let k = 0; k < nl; k++) addLoad(fr, kinds, used);
+      for (let k = 0; k < nl; k++) addLoad(fr, S.loads, used);
       if (!fr.loads.length) continue;
       const sol = F.solve(fr);
       if (!sol.ok) continue;
@@ -668,7 +664,7 @@
       const fr = FAM.gelenk(type, true);
       if (rnd() < 0.5) mirror(fr);
       orient(fr);
-      const used = [], nl = stage <= 5 ? 1 : randi(1, 2);
+      const H = NVM.stufe(Math.max(NVM.HINGE_FROM, stage)).hinge, used = [], nl = randi(H.nl[0], H.nl[1]);
       for (let k = 0; k < nl; k++) addLoad(fr, ['F', 'F', 'q', 'Fs', 'M'], used);
       if (!fr.loads.length) continue;
       const sol = F.solve(fr);
@@ -929,5 +925,5 @@
     ];
   }
 
-  NVM.framegen = { FAM, FAM_MIN, BAND, generate, difficulty, features, frameOptions, frameMods, buildFrameQuestion, buildHingeQuestion, hingeCheatCases, setHinge, HINGE_NAME, orient, mirror, feedback, tip };
+  NVM.framegen = { FAM, generate, difficulty, features, frameOptions, frameMods, buildFrameQuestion, buildHingeQuestion, hingeCheatCases, setHinge, HINGE_NAME, orient, mirror, feedback, tip };
 })(typeof window !== 'undefined' ? window : globalThis);

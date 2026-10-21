@@ -108,17 +108,76 @@
     return cand.length ? pick(cand) : null;
   }
 
+  // ------------------------------------------------------- Stufen
+  // Ein System für alles: Arcade steigt durch genau diese Stufen auf, beim Lernen wählt man eine davon.
+  //   kinds:  Träger im gemischten Modus (Mehrfachnennung = häufiger)
+  //   nl:     Zahl der Lasten am Träger [min, max];  loads: Lastarten am Träger
+  //   hinge:  Gelenk-Aufgaben: Gewicht im Arcade-Mix und Zahl der Lasten (null = noch nicht)
+  //   frame:  Rahmen und Stabwerke: Gewicht im Arcade-Mix je Schnittgröße, Familien, Schwierigkeitsband D
+  //           (geeicht an den Systemen der Sammlung, siehe framegen.difficulty), Zahl und Art der Lasten
+  //   time:   Sekunden je Aufgabe im Arcade (Rahmen +14 s, Gelenk-Aufgaben +6 s)
+  //   incl:   Anteil schiefer Stäbe, wenn „ab und zu“ eingestellt ist (Arcade immer)
+  const ALL_LOADS = ['F', 'F', 'q', 'qvoll', 'M', 'tri', 'Fs', 'H', 'mq'];
+  const FRAME_LOADS = ['F', 'F', 'q', 'q', 'H', 'M', 'tri'];
+  const STUFEN = [
+    {
+      name: 'Einstieg', neu: 'Einfeldträger und Kragarm mit einer Last.',
+      text: 'Einfeldträger und Kragarm mit genau einer Last: Einzellast oder Gleichstreckenlast über die ganze Länge.',
+      kinds: ['eft', 'eft', 'krag'], nl: [1, 1], loads: ['F', 'F', 'qvoll'], hinge: null, frame: null, time: 31, incl: 0.12
+    },
+    {
+      name: 'Grundlagen', neu: 'Neu: Träger mit Kragarm und alle Lastarten.',
+      text: 'Dazu Träger mit Kragarm. Eine Last, jetzt auch Teilstreckenlast, Dreieckslast, Einzelmoment oder Linienmoment.',
+      kinds: ['eft', 'eft', 'krag', 'krag', 'ueber'], nl: [1, 1], loads: ['F', 'F', 'q', 'qvoll', 'M', 'tri', 'mq'], hinge: null, frame: null, time: 28, incl: 0.3
+    },
+    {
+      name: 'Fortgeschritten', neu: 'Neu: Gerberträger, Gelenk-Aufgaben, zwei Lasten.',
+      text: 'Dazu Gerberträger und Träger mit Momenten-, Querkraft- oder Normalkraftgelenk. Ein bis zwei Lasten, auch schräge und waagerechte Einzelkräfte.',
+      kinds: ['eft', 'krag', 'ueber', 'ueber', 'gerber'], nl: [1, 2], loads: ALL_LOADS, hinge: { w: 1, nl: [1, 1] }, frame: null, time: 25, incl: 0.3
+    },
+    {
+      name: 'Erste Rahmen', neu: 'Neu: Kragwinkel, Knick- und Treppenträger.',
+      text: 'Träger mit zwei Lasten. Neu: kleine Rahmen mit einer Last – Kragwinkel, Knick- und Treppenträger, abgespannte Träger.',
+      kinds: ['eft', 'krag', 'ueber', 'gerber', 'gerber'], nl: [2, 2], loads: ALL_LOADS, hinge: { w: 1, nl: [1, 1] }, time: 22, incl: 0.3,
+      frame: { w: { M: 2, V: 1, N: 1 }, fam: ['winkel', 'treppe', 'abspann'], band: [1.2, 3.2], nl: [1, 1], loads: ['F', 'F', 'q', 'H'] }
+    },
+    {
+      name: 'Rahmen', neu: 'Neu: Rahmen und Gelenkträger auf Pendelstützen.',
+      text: 'Träger mit zwei bis drei Lasten. Dazu Rahmen, Dreigelenkrahmen und Gelenkträger auf Pendelstützen mit ein bis zwei Lasten.',
+      kinds: ['eft', 'krag', 'ueber', 'gerber', 'gerber'], nl: [2, 3], loads: ALL_LOADS, hinge: { w: 1, nl: [1, 1] }, time: 19, incl: 0.3,
+      frame: { w: { M: 3, V: 2, N: 1 }, fam: ['winkel', 'treppe', 'abspann', 'portal', 'pendel'], band: [2.6, 4.6], nl: [1, 2], loads: FRAME_LOADS }
+    },
+    {
+      name: 'Pendel- und Nullstäbe', neu: 'Neu: Pendel- und Nullstäbe erkennen.',
+      text: 'Träger mit zwei bis drei Lasten. Stabwerke, bei denen du Pendel- und Nullstäbe erkennen musst: Fachwerkunterbau, unterspannte Träger, Stäbe auf Pendelstäben.',
+      kinds: ['eft', 'krag', 'ueber', 'gerber', 'gerber'], nl: [2, 3], loads: ALL_LOADS, hinge: { w: 1, nl: [1, 2] }, time: 16, incl: 0.3,
+      frame: { w: { M: 4, V: 2, N: 2 }, fam: ['abspann', 'portal', 'pendel', 'dreigelenk', 'fachwerk', 'gelenk'], band: [3.8, 6], nl: [1, 2], loads: FRAME_LOADS }
+    },
+    {
+      name: 'Klausurniveau', neu: 'Neu: größere Stabwerke wie in der Sammlung.',
+      text: 'Träger mit zwei bis drei Lasten. Größere Stabwerke wie in der Schnittgrößensammlung, etwa Gelenkträger mit Rahmenecke und Giebelrahmen mit Zugband, meist mit zwei Lasten.',
+      kinds: ['eft', 'krag', 'ueber', 'gerber', 'gerber'], nl: [2, 3], loads: ALL_LOADS, hinge: { w: 1, nl: [1, 2] }, time: 16, incl: 0.3,
+      frame: { w: { M: 4, V: 2, N: 2 }, fam: ['portal', 'pendel', 'dreigelenk', 'fachwerk', 'gelenk', 'kombi'], band: [5.2, 7.6], nl: [2, 2], loads: FRAME_LOADS }
+    },
+    {
+      name: 'Profi', neu: 'Neu: die größten Stabwerke.',
+      text: 'Träger mit zwei bis drei Lasten. Die größten Stabwerke, ebenfalls mit zwei bis drei Lasten.',
+      kinds: ['eft', 'krag', 'ueber', 'gerber', 'gerber'], nl: [2, 3], loads: ALL_LOADS, hinge: { w: 1, nl: [1, 2] }, time: 16, incl: 0.3,
+      frame: { w: { M: 4, V: 2, N: 2 }, fam: ['portal', 'pendel', 'dreigelenk', 'fachwerk', 'gelenk', 'kombi'], band: [6.8, 12], nl: [2, 3], loads: FRAME_LOADS }
+    }
+  ];
+  const MAX_LEVEL = STUFEN.length;
+  const stufe = (lv) => STUFEN[Math.max(1, Math.min(MAX_LEVEL, Math.round(lv) || 1)) - 1];
+  // ab welcher Stufe es etwas gibt (für Hinweise wie „Rahmen ab Stufe 4“)
+  const firstStufe = (test) => STUFEN.findIndex(test) + 1;
+  const HINGE_FROM = firstStufe((s) => !!s.hinge), FRAME_FROM = firstStufe((s) => !!s.frame);
+  // Anzeige: über die letzte Stufe hinaus zählt Arcade als „Stufe 8+1“, „8+2“ … weiter (nur die Zeit wird knapper)
+  const stufeText = (lv) => (lv > MAX_LEVEL ? `${MAX_LEVEL}+${lv - MAX_LEVEL}` : String(lv));
+
   // ------------------------------------------------------- Zufallssysteme
   function genSystem(level, kindPref = 'alle', needN = false, inclP = 0) {
-    let kind;
-    if (kindPref === 'alle') {
-      let kinds;
-      if (level <= 1) kinds = ['eft', 'eft', 'krag'];
-      else if (level === 2) kinds = ['eft', 'eft', 'krag', 'krag', 'ueber'];
-      else if (level === 3) kinds = ['eft', 'krag', 'ueber', 'ueber', 'gerber'];
-      else kinds = ['eft', 'krag', 'ueber', 'gerber', 'gerber'];
-      kind = pick(kinds);
-    } else kind = kindPref;
+    const St = stufe(level);
+    let kind = kindPref === 'alle' ? pick(St.kinds) : kindPref;
     const incl = rnd() < inclP && ['alle', 'eft', 'krag'].includes(kindPref);
     const fl = rnd() < 0.5 ? ['fest', 'los'] : ['los', 'fest'];
     let sys, L;
@@ -175,13 +234,8 @@
 
     // Lasten
     const st = sys.st;
-    const allT = ['F', 'F', 'q', 'qvoll', 'M', 'tri', 'Fs', 'H', 'mq'];
-    let nl, types;
-    if (level <= 1) { nl = 1; types = ['F', 'F', 'qvoll']; }
-    else if (level === 2) { nl = 1; types = ['F', 'F', 'q', 'qvoll', 'M', 'tri', 'mq']; }
-    else if (level === 3) { nl = randi(1, 2); types = allT; }
-    else if (level === 4) { nl = 2; types = allT; }
-    else { nl = randi(2, 3); types = allT; }
+    const nl = randi(St.nl[0], St.nl[1]);
+    let types = St.loads;
     if (incl) types = types.concat(['qvoll', 'qvoll']);
     const used = [];
     let nq = 0, tries = 0;
@@ -239,11 +293,18 @@
     }
     if (!sys.loads.length) sys.loads.push(mkLoad('q', 'qvoll', 0, L, 10, 10, 0, 10, 0));
     if (needN && !isIncl(sys) && !sys.loads.some((l) => Math.abs(l.Fx) > 1e-9)) {
+      // Normalkraft braucht eine Kraft längs des Stabs; ist die Lastzahl der Stufe schon erreicht, ersetzt sie die letzte Last
+      let old = null;
+      if (sys.loads.length >= St.nl[1]) {
+        old = sys.loads.pop();
+        const k = used.indexOf(old.x);
+        if (old.type !== 'q' && old.type !== 'm' && k >= 0) used.splice(k, 1);
+      }
       const pos = pickFree(sys, used, false);
       if (pos !== null) {
         const Fv = 10 * randi(1, 5), a = pick([30, 45, 60]), sg = rnd() < 0.5 ? 1 : -1;
         sys.loads.push(mkLoad('F', 'Fs', pos, 0, Fv * sind(a), 0, sg * Fv * cosd(a), Fv, a));
-      }
+      } else if (old) sys.loads.push(old);
     }
     return sys;
   }
@@ -1039,71 +1100,49 @@
   }
 
   // ------------------------------------------------------------ Aufgaben
-  // Aufgabentypen je Übungsform und Schnittgröße
-  const TASKS = {
-    verlauf: { M: ['diagM'], V: ['diagV'], N: ['diagN'] },
-    system: { M: ['sysFromM'], V: ['sysFromV'], N: ['sysFromN'] },
-    max: { M: ['clickMmax'], V: ['clickVmax'], N: [] },
-    null: { M: ['clickM0'], V: ['clickV0'], N: [] },
-    werte: { M: ['valMax'], V: ['valR'], N: [] }
-  };
-  // Liefert die möglichen Typen; leer heißt: Kombination gibt es nicht
+  // Träger-Aufgaben gibt es auf jeder Stufe (die Stufe macht nur die Systeme größer); Gewichte für den gemischten Modus
+  const BEAM_MIX = { diagM: 4, diagV: 3, diagN: 1, sysFromM: 2, sysFromV: 1, sysFromN: 1, valMax: 1, valR: 1, clickMmax: 1, clickVmax: 1, clickV0: 1, clickM0: 1 };
+  // Schnittgröße und Übungsform eines Aufgabentyps
+  const QTY_OF = (t) => (/^(diag|sysFrom|frame)/.test(t) ? t[t.length - 1] : ['clickMmax', 'clickM0', 'valMax'].includes(t) ? 'M' : ['clickVmax', 'clickV0', 'valR'].includes(t) ? 'V' : '');
+  const TASK_OF = (t) => (/^(diag|frame)/.test(t) ? 'verlauf' : t.startsWith('sysFrom') ? 'system' : t === 'clickMmax' || t === 'clickVmax' ? 'max'
+    : t === 'clickV0' || t === 'clickM0' ? 'null' : t.startsWith('val') ? 'werte' : 'gelenk');
+  // Aufgabentypen für Stufe, Schnittgröße (N, V, M, 'wert' oder 'mix'), Übungsform und Tragwerk ('alle' = gemischt wie im Arcade).
+  // Leer heißt: gibt es auf dieser Stufe (noch) nicht. Mehrfache Einträge machen einen Typ im gemischten Modus häufiger.
   function typePool(level, qty, task, kind) {
-    let ts;
-    // Gelenk-Aufgaben (Träger mit Momenten-, Querkraft- oder Normalkraftgelenk): ab Stufe 3
-    if (task === 'gelenk') {
-      if (level < 3 || !['gerber', 'rahmen', 'alle'].includes(kind) || qty === 'wert') return [];
-      return ['hingeDiag', 'hingeDiag', 'hingeSys'];
-    }
-    // Rahmen und Stabwerke: nur Verläufe, ab Stufe 4
-    if (kind === 'rahmen') {
-      if (level < 4 || (task && task !== 'mix' && task !== 'verlauf') || qty === 'wert') return [];
-      return qty === 'M' || qty === 'V' || qty === 'N' ? ['frame' + qty] : ['frameM', 'frameV', 'frameN'];
-    }
-    if (task && task !== 'mix' && TASKS[task]) {
-      const t = TASKS[task];
-      ts = qty === 'M' || qty === 'V' || qty === 'N' ? t[qty].slice() : [...t.M, ...t.V, ...t.N];
-    } else {
-      switch (qty) {
-        case 'M':
-          ts = ['diagM', 'diagM', 'diagM', 'valMax', 'clickMmax'];
-          if (level >= 2) ts.push('sysFromM', 'sysFromM');
-          if (level >= 3) ts.push('clickM0');
-          break;
-        case 'V': ts = ['diagV', 'diagV', 'diagV', 'valR', 'clickV0', 'clickVmax']; if (level >= 2) ts.push('sysFromV'); break;
-        case 'N': ts = ['diagN', 'diagN', 'sysFromN']; break;
-        case 'wert': ts = ['valMax', 'valR']; break;
-        default:
-          ts = ['diagM', 'diagM', 'diagM', 'diagV', 'diagV', 'valMax', 'valR', 'clickMmax'];
-          if (level >= 2) ts.push('sysFromM', 'sysFromM', 'clickV0', 'sysFromV');
-          if (level >= 3) ts.push('diagN', 'clickM0');
+    const St = stufe(level), out = [];
+    const anyTask = !task || task === 'mix', anyQty = !qty || qty === 'mix';
+    const fits = (t) => (anyTask || TASK_OF(t) === task) &&
+      (anyQty || (qty === 'wert' ? t.startsWith('val') : t.startsWith('hinge') || QTY_OF(t) === qty));
+    const add = (t, w) => { if (w > 0 && fits(t)) for (let i = 0; i < w; i++) out.push(t); };
+    if (kind !== 'rahmen') {
+      for (const t of Object.keys(BEAM_MIX)) {
+        // Momentennullpunkt im Inneren braucht ein Innenlager oder Gelenk, Vorzeichenwechsel von V beim Kragarm gibt es praktisch nie
+        if (t === 'clickM0' && (kind === 'krag' || kind === 'eft' || (kind === 'alle' && !St.kinds.some((k) => k === 'ueber' || k === 'gerber')))) continue;
+        if (t === 'clickV0' && kind === 'krag') continue;
+        add(t, kind === 'alle' ? BEAM_MIX[t] : 1);
       }
     }
-    // Kombinationen, die mit dem Tragwerk praktisch nie entstehen
-    const drop = [];
-    if (kind === 'krag') drop.push('clickV0', 'clickM0');
-    if (kind === 'eft') drop.push('clickM0');
-    let f = ts.filter((t) => !drop.includes(t));
-    // gemischt (Arcade): ab Stufe 4 kommen Rahmen dazu, mit der Stufe immer häufiger
-    if (kind === 'alle' && level >= 4 && (!task || task === 'mix' || task === 'verlauf') && qty !== 'wert') {
-      const nF = level === 4 ? 3 : level === 5 ? 5 : 7;
-      const fq = qty === 'M' || qty === 'V' || qty === 'N' ? ['frame' + qty] : ['frameM', 'frameM', 'frameV', 'frameN'];
-      for (let i = 0; i < nF; i++) f.push(fq[i % fq.length]);
-      if (level >= 5 && (!task || task === 'mix')) f.push('hingeDiag', 'hingeSys');
+    // Gelenk-Aufgaben: Träger mit Momenten-, Querkraft- oder Normalkraftgelenk
+    if (St.hinge && ['alle', 'gerber', 'rahmen'].includes(kind) && qty !== 'wert') {
+      add('hingeDiag', kind === 'alle' ? St.hinge.w : 1); add('hingeSys', kind === 'alle' ? St.hinge.w : 1);
     }
-    if (task && task !== 'mix' && TASKS[task]) return f;      // gezielt: lieber leer als etwas anderes
-    return f.length ? f : ts;
+    // Rahmen und Stabwerke: nur als Verlauf
+    if (St.frame && (kind === 'rahmen' || kind === 'alle') && qty !== 'wert') {
+      for (const Q of ['M', 'V', 'N']) add('frame' + Q, kind === 'alle' ? St.frame.w[Q] : 1);
+    }
+    return out;
   }
   function pickType(level, qty, task, kind) {
     let ts = typePool(level, qty, task, kind);
     if (!ts.length) ts = typePool(level, 'mix', task, kind);   // z. B. N + Stelle antippen
-    return pick(ts);
+    if (!ts.length) ts = typePool(level, 'mix', 'mix', kind === 'rahmen' ? 'alle' : kind);
+    return ts.length ? pick(ts) : 'diagM';
   }
-  // Lernmodus mit Mehrfachauswahl: alle passenden Kombinationen aus Schnittgröße, Aufgabe und Tragwerk
+  // Lernmodus mit Mehrfachauswahl: alle passenden Kombinationen aus Schnittgröße, Aufgabe und Tragwerk auf der gewählten Stufe
   function learnPool(qtys, tasks, kinds, level = 1) {
     const pool = [];
     for (const task of tasks) for (const qty of qtys) for (const kind of kinds) {
-      for (const type of new Set(typePool(kind === 'rahmen' || task === 'gelenk' ? level : 1, qty, task, kind))) pool.push({ type, qty, task, kind });
+      for (const type of new Set(typePool(level, qty, task, kind))) pool.push({ type, qty, task, kind });
     }
     return pool;
   }
@@ -1112,20 +1151,6 @@
     const other = pool.filter((p) => p.type !== lastType);
     return pick(other.length ? other : pool);
   }
-
-  // Was die Stufen am Zufallsgenerator ändern (siehe genSystem)
-  const LEVEL_INFO = [
-    { name: 'Einstieg', short: 'Einfeldträger und Kragarm mit einer Last.', systems: 'Einfeldträger und Kragarm', loads: 'Genau eine Last: Einzellast oder Gleichstreckenlast über die ganze Länge.' },
-    { name: 'Grundlagen', short: 'Neu: Träger mit Kragarm und alle Lastarten.', systems: 'dazu Träger mit Kragarm', loads: 'Eine Last, jetzt auch Teilstreckenlast, Dreieckslast, Einzelmoment oder Linienmoment.' },
-    { name: 'Fortgeschritten', short: 'Neu: Gerberträger, zwei Lasten.', systems: 'dazu Gerberträger', loads: 'Ein bis zwei Lasten, auch schräge und waagerechte Einzelkräfte.' },
-    { name: 'Erste Rahmen', short: 'Neu: Kragwinkel, Knick- und Treppenträger.', systems: 'Träger mit zwei Lasten, dazu Kragwinkel, Knick- und Treppenträger und abgespannte Träger', loads: 'Träger mit zwei Lasten. Neu: kleine Rahmen mit einer Last – Kragwinkel, Knick- und Treppenträger, abgespannte Träger.' },
-    { name: 'Rahmen', short: 'Neu: Rahmen und Gelenkträger auf Pendelstützen.', systems: 'dazu Rahmen, Dreigelenkrahmen und Gelenkträger auf Pendelstützen', loads: 'Träger mit zwei bis drei Lasten. Rahmen, Dreigelenkrahmen und Gelenkträger auf Pendelstützen mit ein bis zwei Lasten.' },
-    { name: 'Pendel- und Nullstäbe', short: 'Pendel- und Nullstäbe erkennen.', systems: 'dazu Fachwerkunterbau, unterspannte Träger und Stäbe auf Pendelstäben', loads: 'Träger mit zwei bis drei Lasten. Stabwerke, bei denen du Pendel- und Nullstäbe erkennen musst: Fachwerkunterbau, unterspannte Träger, Stäbe auf Pendelstäben.' },
-    { name: 'Klausurniveau', short: 'Größere Stabwerke wie in der Sammlung.', systems: 'dazu Gelenkträger mit Rahmenecke und Giebelrahmen mit Zugband', loads: 'Träger mit zwei bis drei Lasten. Größere Stabwerke wie in der Schnittgrößensammlung, meist mit zwei Lasten.' },
-    { name: 'Profi', short: 'Die größten Stabwerke.', systems: 'alle, die größten Systeme', loads: 'Träger mit zwei bis drei Lasten. Die größten Stabwerke, ebenfalls mit zwei bis drei Lasten.' }
-  ];
-  const levelInfo = (lv) => LEVEL_INFO[Math.max(1, Math.min(LEVEL_INFO.length, lv)) - 1];
-  const MAX_LEVEL = LEVEL_INFO.length;
 
   const isClickType = (t) => ['clickMmax', 'clickVmax', 'clickV0', 'clickM0'].includes(t);
   const isValType = (t) => ['valMax', 'valR'].includes(t);
@@ -1196,19 +1221,19 @@
       if (attempt >= 150) task = 'mix';
       let typ = forceType || pickType(level, qty, task, kind);
       if (typ === 'hingeDiag' || typ === 'hingeSys') {
-        const hq = root.NVM.framegen && root.NVM.framegen.buildHingeQuestion(level, typ === 'hingeSys' ? 'sys' : 'diag', qty);
+        const hq = root.NVM.framegen && root.NVM.framegen.buildHingeQuestion(Math.min(level, MAX_LEVEL), typ === 'hingeSys' ? 'sys' : 'diag', qty);
         if (hq) return hq;
         continue;
       }
       if (typ.startsWith('frame')) {
-        const fq = root.NVM.framegen && root.NVM.framegen.buildFrameQuestion(Math.max(4, level), typ[5]);
+        const fq = root.NVM.framegen && root.NVM.framegen.buildFrameQuestion(Math.max(FRAME_FROM, Math.min(level, MAX_LEVEL)), typ[5]);
         if (fq) return fq;
         continue;
       }
       if (kind === 'rahmen') continue;
       let kpref = kind;
       if (typ === 'clickV0' && kind === 'krag') typ = 'diagV';
-      if (typ === 'clickM0' && kind === 'alle') kpref = pick(['ueber', 'gerber']);
+      if (typ === 'clickM0' && kind === 'alle') { const ks = stufe(level).kinds.filter((k) => k === 'ueber' || k === 'gerber'); kpref = pick(ks.length ? ks : ['ueber']); }
 
       if (isValType(typ) && cfg.calc !== 'rechner') {
         const it = classicItem(typ === 'valMax' ? 'M' : 'R', cfg.calc, cfg.incl > 0);
@@ -1612,7 +1637,7 @@
     fmt, fmtL, fmtN,
     mkLoad, mkSup, baseSys, setIncline, isIncl, genSystem,
     loadArrays, solveSys, sgAt, sgArr, eqVec, curves, critPts, distRes, pickQ,
-    systemMods, classicCase, classicItem, buildQuestion, pickType, typePool, learnPool, nextPick, LEVEL_INFO, levelInfo, MAX_LEVEL, isClickType, isValType,
+    systemMods, classicCase, classicItem, buildQuestion, pickType, typePool, learnPool, nextPick, STUFEN, stufe, stufeText, HINGE_FROM, FRAME_FROM, MAX_LEVEL, isClickType, isValType,
     clusterRanges, supNames, momentAtSupport, looksSame, featureRules, classicLine,
     tagExpl, tagLabel, praise, randomTip, rankName, RULES, cheatCases
   };

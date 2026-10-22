@@ -295,6 +295,7 @@ text.sv-cross-text { font-weight: 700; pointer-events: none; }
 }
 .hero { grid-area: hero; }
 .credit { grid-column: 1 / -1; margin: 8px 0 0; padding-top: 16px; border-top: 1px solid var(--line, currentColor); color: var(--ink-soft); font-size: .85rem; }
+.credit a { color: inherit; text-underline-offset: 2px; }
 .hero-mark { display: block; width: min(620px, 100%); height: auto; margin-left: -10px; }
 .hm-letter { font: 800 170px var(--font-logo); }
 .hm-n { fill: var(--n); } .hm-v { fill: var(--v); } .hm-m { fill: var(--m); }

@@ -4,7 +4,7 @@
  * Schriften, Icons und KaTeX ändern sich nicht: direkt aus dem Speicher.
  * VERSION erhöhen, wenn sich Dateien ändern, damit alte Speicherstände gelöscht werden.
  * Dieselbe Nummer steht als ?v= an Skripten und Stilen in index.html: So lädt eine neue Seite nie alte Skripte. */
-const VERSION = 'nvm-v34';
+const VERSION = 'nvm-v35';
 const FILES = [
   './',
   'fonts.css',

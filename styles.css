@@ -295,7 +295,6 @@ text.sv-cross-text { font-weight: 700; pointer-events: none; }
 }
 .hero { grid-area: hero; }
 .credit { grid-column: 1 / -1; margin: 8px 0 0; padding-top: 16px; border-top: 1px solid var(--line, currentColor); color: var(--ink-soft); font-size: .85rem; }
-.credit a { color: inherit; text-underline-offset: 2px; }
 .hero-mark { display: block; width: min(620px, 100%); height: auto; margin-left: -10px; }
 .hm-letter { font: 800 170px var(--font-logo); }
 .hm-n { fill: var(--n); } .hm-v { fill: var(--v); } .hm-m { fill: var(--m); }
@@ -317,6 +316,8 @@ text.sv-cross-text { font-weight: 700; pointer-events: none; }
 .hm-hn { stroke: var(--n); } .hm-hv { stroke: var(--v); } .hm-hm { stroke: var(--m); }
 .tagline { margin: 6px 0 8px; font: 600 clamp(1.5rem, 1.1rem + 1.6vw, 2.2rem)/1.15 var(--font-head); letter-spacing: -.01em; }
 .lede { max-width: 60ch; margin: 0; color: var(--ink-soft); font-size: 1.08rem; }
+.lede-note { max-width: 60ch; margin: 8px 0 0; color: var(--ink-soft); font-size: .9rem; }
+.lede-note a { color: inherit; text-underline-offset: 2px; }
 
 .modes { grid-area: modes; display: flex; flex-direction: column; gap: 12px; }
 .mode {
